@@ -65,6 +65,19 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The sidebar hosting view, kept for theme updates on config change.
     private var sidebarHostingView: NSHostingView<SidebarView>?
 
+    /// Unique ID for this tab's notes, persisted for window restoration.
+    private(set) var notesID: UUID = UUID()
+
+    /// The notes text content for this tab.
+    @Published var notesText: String = "" {
+        didSet { scheduleNotesSave() }
+    }
+
+    /// Whether the notes panel is visible for this tab.
+    @Published var notesIsVisible: Bool = false
+
+    /// Debounce timer for auto-saving notes.
+    private var notesSaveTimer: Timer?
 
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
@@ -1093,6 +1106,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // SwiftUI focus chain.
         terminalContainer.initialContentSize = focusedSurface?.initialSize
 
+        // Load any persisted notes for this tab
+        loadNotes()
+
         // Create the sidebar hosting view
         let sidebarHostingView = NSHostingView(rootView: SidebarView(
             tabManager: tabManager,
@@ -1443,6 +1459,26 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     @IBAction func toggleTerminalInspector(_ sender: Any?) {
         guard let surface = focusedSurface?.surface else { return }
         ghostty.toggleTerminalInspector(surface: surface)
+    }
+
+    @IBAction func toggleNotes(_ sender: Any?) {
+        notesIsVisible.toggle()
+    }
+
+    // MARK: - Notes Persistence
+
+    /// Schedule a debounced save of notes content.
+    private func scheduleNotesSave() {
+        notesSaveTimer?.invalidate()
+        notesSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            NotesPersistence.save(self.notesText, for: self.notesID)
+        }
+    }
+
+    /// Load notes from disk using the current notesID.
+    private func loadNotes() {
+        notesText = NotesPersistence.load(for: notesID)
     }
 
     // MARK: - TerminalViewDelegate
