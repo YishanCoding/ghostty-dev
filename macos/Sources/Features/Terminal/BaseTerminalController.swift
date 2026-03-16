@@ -53,11 +53,13 @@ class BaseTerminalController: NSWindowController,
 
     /// The task title for this tab, displayed at the top.
     @Published var taskTitle: String = "" {
-        didSet { SessionPersistence.save() }
+        didSet { scheduleSessionSave() }
     }
 
     /// Whether the task title bar is visible for this tab.
-    @Published var taskTitleIsVisible: Bool = false
+    @Published var taskTitleIsVisible: Bool = false {
+        didSet { SessionPersistence.save() }
+    }
 
     /// The tab color, read from the window.
     var currentTabColor: TerminalTabColor {
@@ -73,10 +75,15 @@ class BaseTerminalController: NSWindowController,
     }
 
     /// Whether the notes panel is visible for this tab.
-    @Published var notesIsVisible: Bool = false
+    @Published var notesIsVisible: Bool = false {
+        didSet { SessionPersistence.save() }
+    }
 
     /// Debounce timer for auto-saving notes.
     private var notesSaveTimer: Timer?
+
+    /// Debounce timer for session saves (e.g. taskTitle typing).
+    private var sessionSaveTimer: Timer?
 
     /// Guard flag to suppress save during notes load.
     private var isLoadingNotes = false
@@ -122,7 +129,10 @@ class BaseTerminalController: NSWindowController,
     /// An override title for the tab/window set by the user via prompt_tab_title.
     /// When set, this takes precedence over the computed title from the terminal.
     var titleOverride: String? {
-        didSet { applyTitleToWindow() }
+        didSet {
+            applyTitleToWindow()
+            SessionPersistence.save()
+        }
     }
 
     /// The last computed title from the focused surface (without the override).
@@ -1338,6 +1348,7 @@ class BaseTerminalController: NSWindowController,
     @IBAction func setTabColor(_ sender: NSMenuItem) {
         guard let color = TerminalTabColor(rawValue: sender.tag) else { return }
         (window as? TerminalWindow)?.tabColor = color
+        SessionPersistence.save()
     }
 
     @IBAction func toggleTabBorder(_ sender: Any) {
@@ -1615,8 +1626,17 @@ extension BaseTerminalController {
     /// Flush any pending notes save. Called from subclass deinit.
     func flushNotesSave() {
         notesSaveTimer?.invalidate()
+        sessionSaveTimer?.invalidate()
         if !notesText.isEmpty {
             NotesPersistence.save(notesText, for: notesID)
+        }
+    }
+
+    /// Schedule a debounced session save (for taskTitle typing).
+    func scheduleSessionSave() {
+        sessionSaveTimer?.invalidate()
+        sessionSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+            SessionPersistence.save()
         }
     }
 }
