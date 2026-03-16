@@ -41,13 +41,15 @@ extension TerminalRestorable {
 
 /// The state stored for terminal window restoration.
 class TerminalRestorableState: TerminalRestorable {
-    class var version: Int { 7 }
+    class var version: Int { 8 }
 
     let focusedSurface: String?
     let surfaceTree: SplitTree<Ghostty.SurfaceView>
     let effectiveFullscreenMode: FullscreenMode?
     let tabColor: TerminalTabColor
     let titleOverride: String?
+    let notesID: String?
+    let notesIsVisible: Bool
 
     init(from controller: TerminalController) {
         self.focusedSurface = controller.focusedSurface?.id.uuidString
@@ -55,6 +57,8 @@ class TerminalRestorableState: TerminalRestorable {
         self.effectiveFullscreenMode = controller.fullscreenStyle?.fullscreenMode
         self.tabColor = (controller.window as? TerminalWindow)?.tabColor ?? .none
         self.titleOverride = controller.titleOverride
+        self.notesID = controller.notesID.uuidString
+        self.notesIsVisible = controller.notesIsVisible
     }
 
     required init(copy other: TerminalRestorableState) {
@@ -63,6 +67,8 @@ class TerminalRestorableState: TerminalRestorable {
         self.effectiveFullscreenMode = other.effectiveFullscreenMode
         self.tabColor = other.tabColor
         self.titleOverride = other.titleOverride
+        self.notesID = other.notesID
+        self.notesIsVisible = other.notesIsVisible
     }
 }
 
@@ -126,6 +132,15 @@ class TerminalWindowRestoration: NSObject, NSWindowRestoration {
 
         // Restore the tab title override
         c.titleOverride = state.titleOverride
+
+        // Restore notes state. Must reload after setting notesID because
+        // windowDidLoad already called loadNotes() with the default UUID.
+        if let notesIDString = state.notesID,
+           let restoredID = UUID(uuidString: notesIDString) {
+            c.notesID = restoredID
+            c.loadNotes()
+        }
+        c.notesIsVisible = state.notesIsVisible
 
         // Setup our restored state on the controller
         // Find the focused surface in surfaceTree

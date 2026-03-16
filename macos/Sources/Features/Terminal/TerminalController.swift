@@ -66,7 +66,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     private var sidebarHostingView: NSHostingView<SidebarView>?
 
     /// Unique ID for this tab's notes, persisted for window restoration.
-    private(set) var notesID: UUID = UUID()
+    var notesID: UUID = UUID()
 
     /// The notes text content for this tab.
     @Published var notesText: String = "" {
@@ -1477,7 +1477,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     /// Load notes from disk using the current notesID.
-    private func loadNotes() {
+    func loadNotes() {
         notesText = NotesPersistence.load(for: notesID)
     }
 
