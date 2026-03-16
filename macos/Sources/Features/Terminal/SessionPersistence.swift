@@ -6,6 +6,9 @@ import OSLog
 enum SessionPersistence {
     private static let logger = Logger(subsystem: "com.mitchellh.ghostty", category: "session")
 
+    /// Guard flag to suppress saves during restoration.
+    private(set) static var isRestoring = false
+
     private static let sessionsDirectory: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".config/ghosttydev/sessions", isDirectory: true)
@@ -81,6 +84,7 @@ enum SessionPersistence {
 
     /// Save all terminal windows to the session file.
     static func save() {
+        guard !isRestoring else { return }
         let controllers = TerminalController.all
         guard !controllers.isEmpty else {
             // No windows — remove state file so we don't restore stale state
@@ -159,6 +163,9 @@ enum SessionPersistence {
     static func restore(ghostty: Ghostty.App) -> Bool {
         guard let state = load() else { return false }
         guard !state.windows.isEmpty else { return false }
+
+        isRestoring = true
+        defer { isRestoring = false }
 
         for windowState in state.windows {
             guard !windowState.tabs.isEmpty else { continue }
