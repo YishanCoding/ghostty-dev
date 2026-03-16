@@ -180,6 +180,7 @@ enum SessionPersistence {
             guard !windowState.tabs.isEmpty else { continue }
 
             var firstController: TerminalController?
+            var lastWindow: NSWindow?
 
             for (index, tab) in windowState.tabs.enumerated() {
                 let controller = TerminalController.init(
@@ -208,13 +209,14 @@ enum SessionPersistence {
 
                 if index == 0 {
                     firstController = controller
-                    // Restore window frame
+                    lastWindow = window
                     window.setFrame(windowState.frame.nsRect, display: true)
                     controller.showWindow(nil)
-                } else if let firstWindow = firstController?.window {
-                    // Add as tab to the first window
+                } else if let prevWindow = lastWindow {
+                    // Add after the previous tab to preserve order
                     controller.showWindow(nil)
-                    firstWindow.addTabbedWindowSafely(window, ordered: .above)
+                    prevWindow.addTabbedWindowSafely(window, ordered: .above)
+                    lastWindow = window
                 }
             }
 
