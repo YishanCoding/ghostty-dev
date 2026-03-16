@@ -59,6 +59,11 @@ class BaseTerminalController: NSWindowController,
     /// Whether the task title bar is visible for this tab.
     @Published var taskTitleIsVisible: Bool = false
 
+    /// The tab color, read from the window.
+    var currentTabColor: TerminalTabColor {
+        (window as? TerminalWindow)?.tabColor ?? .none
+    }
+
     /// Unique ID for this tab's notes, persisted for window restoration.
     var notesID: UUID = UUID()
 

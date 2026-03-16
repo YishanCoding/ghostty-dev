@@ -42,6 +42,9 @@ protocol TerminalViewModel: ObservableObject {
     /// Whether the task title bar is visible.
     var taskTitleIsVisible: Bool { get set }
 
+    /// The tab color for display in task title bar.
+    var currentTabColor: TerminalTabColor { get }
+
     /// The notes text for this tab.
     var notesText: String { get set }
 
@@ -76,6 +79,16 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
         return URL(fileURLWithPath: surfacePwd)
     }
 
+    /// Calculate the width of the first pane based on the split tree.
+    /// If no horizontal split at root, returns the full width.
+    private func firstPaneWidth(in totalWidth: CGFloat) -> CGFloat {
+        guard case let .split(split) = viewModel.surfaceTree.root,
+              split.direction == .horizontal else {
+            return totalWidth
+        }
+        return totalWidth * split.ratio
+    }
+
     var body: some View {
         switch ghostty.readiness {
         case .loading:
@@ -91,45 +104,58 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                         DebugBuildWarningView()
                     }
 
-                    if viewModel.taskTitleIsVisible {
-                        TaskTitleBar(
-                            text: $viewModel.taskTitle,
-                            onDismissFocus: { self.focused = true }
-                        )
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+                    GeometryReader { geo in
+                        let firstPaneWidth = firstPaneWidth(in: geo.size.width)
 
-                    TerminalSplitTreeView(
-                        tree: viewModel.surfaceTree,
-                        action: { delegate?.performSplitAction($0) })
-                        .environmentObject(ghostty)
-                        .ghosttyLastFocusedSurface(lastFocusedSurface)
-                        .focused($focused)
-                        .onAppear { self.focused = true }
-                        .onChange(of: focusedSurface) { newValue in
-                            // We want to keep track of our last focused surface so even if
-                            // we lose focus we keep this set to the last non-nil value.
-                            if newValue != nil {
-                                lastFocusedSurface = .init(newValue)
-                                self.delegate?.focusedSurfaceDidChange(to: newValue)
+                        VStack(spacing: 0) {
+                            if viewModel.taskTitleIsVisible {
+                                HStack(spacing: 0) {
+                                    TaskTitleBar(
+                                        text: $viewModel.taskTitle,
+                                        tabColor: viewModel.currentTabColor,
+                                        onDismissFocus: { self.focused = true }
+                                    )
+                                    .frame(width: firstPaneWidth)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                    Spacer(minLength: 0)
+                                }
+                            }
+
+                            TerminalSplitTreeView(
+                                tree: viewModel.surfaceTree,
+                                action: { delegate?.performSplitAction($0) })
+                                .environmentObject(ghostty)
+                                .ghosttyLastFocusedSurface(lastFocusedSurface)
+                                .focused($focused)
+                                .onAppear { self.focused = true }
+                                .onChange(of: focusedSurface) { newValue in
+                                    if newValue != nil {
+                                        lastFocusedSurface = .init(newValue)
+                                        self.delegate?.focusedSurfaceDidChange(to: newValue)
+                                    }
+                                }
+                                .onChange(of: pwdURL) { newValue in
+                                    self.delegate?.pwdDidChange(to: newValue)
+                                }
+                                .onChange(of: cellSize) { newValue in
+                                    guard let size = newValue else { return }
+                                    self.delegate?.cellSizeDidChange(to: size)
+                                }
+                                .frame(idealWidth: lastFocusedSurface?.value?.initialSize?.width,
+                                       idealHeight: lastFocusedSurface?.value?.initialSize?.height)
+
+                            if viewModel.notesIsVisible {
+                                HStack(spacing: 0) {
+                                    NotesPanel(
+                                        text: $viewModel.notesText,
+                                        onDismissFocus: { self.focused = true }
+                                    )
+                                    .frame(width: firstPaneWidth)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    Spacer(minLength: 0)
+                                }
                             }
                         }
-                        .onChange(of: pwdURL) { newValue in
-                            self.delegate?.pwdDidChange(to: newValue)
-                        }
-                        .onChange(of: cellSize) { newValue in
-                            guard let size = newValue else { return }
-                            self.delegate?.cellSizeDidChange(to: size)
-                        }
-                        .frame(idealWidth: lastFocusedSurface?.value?.initialSize?.width,
-                               idealHeight: lastFocusedSurface?.value?.initialSize?.height)
-
-                    if viewModel.notesIsVisible {
-                        NotesPanel(
-                            text: $viewModel.notesText,
-                            onDismissFocus: { self.focused = true }
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 // Ignore safe area to extend up in to the titlebar region if we have the "hidden" titlebar style
