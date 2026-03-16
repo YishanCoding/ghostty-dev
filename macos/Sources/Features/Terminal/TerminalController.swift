@@ -558,6 +558,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // Refresh sidebar across all windows in the tab group
         refreshAllSidebars()
+
+        // Save session state on tab reorder/change
+        SessionPersistence.save()
     }
 
     /// Updates the sidebar theme when the terminal config changes.
