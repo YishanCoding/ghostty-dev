@@ -53,6 +53,22 @@ enum SessionPersistence {
             self.notesID = controller.notesID.uuidString
             self.notesIsVisible = controller.notesIsVisible
         }
+
+        /// Custom decoder with defaults for backward compatibility.
+        /// New Bool/optional fields added later will decode as false/nil
+        /// instead of crashing on old JSON files.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            focusedSurface = try c.decodeIfPresent(String.self, forKey: .focusedSurface)
+            surfaceTree = try c.decode(SplitTree<Ghostty.SurfaceView>.self, forKey: .surfaceTree)
+            effectiveFullscreenMode = try c.decodeIfPresent(FullscreenMode.self, forKey: .effectiveFullscreenMode)
+            tabColor = try c.decodeIfPresent(TerminalTabColor.self, forKey: .tabColor) ?? .none
+            titleOverride = try c.decodeIfPresent(String.self, forKey: .titleOverride)
+            taskTitle = try c.decodeIfPresent(String.self, forKey: .taskTitle)
+            taskTitleIsVisible = try c.decodeIfPresent(Bool.self, forKey: .taskTitleIsVisible) ?? false
+            notesID = try c.decodeIfPresent(String.self, forKey: .notesID)
+            notesIsVisible = try c.decodeIfPresent(Bool.self, forKey: .notesIsVisible) ?? false
+        }
     }
 
     /// A window containing one or more tabs.
