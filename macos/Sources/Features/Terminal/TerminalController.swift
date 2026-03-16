@@ -1446,6 +1446,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         ghostty.toggleTerminalInspector(surface: surface)
     }
 
+    @IBAction func toggleTaskTitle(_ sender: Any?) {
+        withAnimation {
+            taskTitleIsVisible.toggle()
+        }
+    }
+
     @IBAction func toggleNotes(_ sender: Any?) {
         withAnimation {
             notesIsVisible.toggle()

@@ -39,6 +39,9 @@ protocol TerminalViewModel: ObservableObject {
     /// The task title for this tab.
     var taskTitle: String { get set }
 
+    /// Whether the task title bar is visible.
+    var taskTitleIsVisible: Bool { get set }
+
     /// The notes text for this tab.
     var notesText: String { get set }
 
@@ -88,10 +91,13 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                         DebugBuildWarningView()
                     }
 
-                    TaskTitleBar(
-                        text: $viewModel.taskTitle,
-                        onDismissFocus: { self.focused = true }
-                    )
+                    if viewModel.taskTitleIsVisible {
+                        TaskTitleBar(
+                            text: $viewModel.taskTitle,
+                            onDismissFocus: { self.focused = true }
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
 
                     TerminalSplitTreeView(
                         tree: viewModel.surfaceTree,

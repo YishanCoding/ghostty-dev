@@ -356,6 +356,12 @@
                                     <action selector="toggleReadonly:" target="-1" id="Gqx-wT-K9v"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Toggle Task Title" keyEquivalent="m" id="ttl-pn-Tgl">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES" shift="YES"/>
+                                <connections>
+                                    <action selector="toggleTaskTitle:" target="-1" id="ttl-ac-Tgl"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Toggle Notes" keyEquivalent="N" id="nts-pn-Tgl">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES" shift="YES"/>
                                 <connections>

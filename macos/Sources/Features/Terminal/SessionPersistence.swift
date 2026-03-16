@@ -38,6 +38,7 @@ enum SessionPersistence {
         let tabColor: TerminalTabColor
         let titleOverride: String?
         let taskTitle: String?
+        let taskTitleIsVisible: Bool
         let notesID: String?
         let notesIsVisible: Bool
 
@@ -48,6 +49,7 @@ enum SessionPersistence {
             self.tabColor = (controller.window as? TerminalWindow)?.tabColor ?? .none
             self.titleOverride = controller.titleOverride
             self.taskTitle = controller.taskTitle.isEmpty ? nil : controller.taskTitle
+            self.taskTitleIsVisible = controller.taskTitleIsVisible
             self.notesID = controller.notesID.uuidString
             self.notesIsVisible = controller.notesIsVisible
         }
@@ -202,6 +204,7 @@ enum SessionPersistence {
                 }
                 controller.notesIsVisible = tab.notesIsVisible
                 controller.taskTitle = tab.taskTitle ?? ""
+                controller.taskTitleIsVisible = tab.taskTitleIsVisible
 
                 // Restore focus
                 if let focusedStr = tab.focusedSurface {

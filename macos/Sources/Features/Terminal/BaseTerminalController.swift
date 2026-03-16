@@ -54,6 +54,9 @@ class BaseTerminalController: NSWindowController,
     /// The task title for this tab, displayed at the top.
     @Published var taskTitle: String = ""
 
+    /// Whether the task title bar is visible for this tab.
+    @Published var taskTitleIsVisible: Bool = false
+
     /// Unique ID for this tab's notes, persisted for window restoration.
     var notesID: UUID = UUID()
 
