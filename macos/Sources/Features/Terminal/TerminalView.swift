@@ -35,6 +35,12 @@ protocol TerminalViewModel: ObservableObject {
 
     /// The update overlay should be visible.
     var updateOverlayIsVisible: Bool { get }
+
+    /// The notes text for this tab.
+    var notesText: String { get set }
+
+    /// Whether the notes panel is visible.
+    var notesIsVisible: Bool { get set }
 }
 
 /// The main terminal view. This terminal view supports splits.
@@ -103,6 +109,14 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                         }
                         .frame(idealWidth: lastFocusedSurface?.value?.initialSize?.width,
                                idealHeight: lastFocusedSurface?.value?.initialSize?.height)
+
+                    if viewModel.notesIsVisible {
+                        NotesPanel(
+                            text: $viewModel.notesText,
+                            onDismissFocus: { self.focused = true }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
                 // Ignore safe area to extend up in to the titlebar region if we have the "hidden" titlebar style
                 .ignoresSafeArea(.container, edges: ghostty.config.macosTitlebarStyle == .hidden ? .top : [])
