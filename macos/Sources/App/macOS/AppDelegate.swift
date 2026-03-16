@@ -422,9 +422,9 @@ class AppDelegate: NSObject,
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Save session state before quitting
+        // Final session save — blocks all subsequent saves during window teardown
         if ghostty.config.windowSaveState != "never" {
-            SessionPersistence.save()
+            SessionPersistence.saveForTermination()
         }
 
         GhosttyIPCServer.shared.stop()

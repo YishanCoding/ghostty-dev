@@ -9,6 +9,9 @@ enum SessionPersistence {
     /// Guard flag to suppress saves during restoration.
     private(set) static var isRestoring = false
 
+    /// Guard flag to suppress saves after final termination save.
+    private(set) static var isTerminating = false
+
     private static let sessionsDirectory: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".config/ghosttydev/sessions", isDirectory: true)
@@ -82,9 +85,15 @@ enum SessionPersistence {
 
     // MARK: - Save
 
+    /// Final save before app termination. Blocks all subsequent saves.
+    static func saveForTermination() {
+        save()
+        isTerminating = true
+    }
+
     /// Save all terminal windows to the session file.
     static func save() {
-        guard !isRestoring else { return }
+        guard !isRestoring && !isTerminating else { return }
         let controllers = TerminalController.all
         guard !controllers.isEmpty else {
             // No windows — remove state file so we don't restore stale state
