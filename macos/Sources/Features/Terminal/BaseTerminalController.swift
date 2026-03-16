@@ -51,6 +51,23 @@ class BaseTerminalController: NSWindowController,
     /// Set if the terminal view should show the update overlay.
     @Published var updateOverlayIsVisible: Bool = false
 
+    /// Unique ID for this tab's notes, persisted for window restoration.
+    var notesID: UUID = UUID()
+
+    /// The notes text content for this tab.
+    @Published var notesText: String = "" {
+        didSet { scheduleNotesSave() }
+    }
+
+    /// Whether the notes panel is visible for this tab.
+    @Published var notesIsVisible: Bool = false
+
+    /// Debounce timer for auto-saving notes.
+    private var notesSaveTimer: Timer?
+
+    /// Guard flag to suppress save during notes load.
+    private var isLoadingNotes = false
+
     /// True when any surface in this controller currently has an active bell.
     @Published private(set) var bell: Bool = false
 
@@ -1559,6 +1576,35 @@ extension BaseTerminalController {
             // subscriptions for old/removed surfaces when the tree changes.
             .switchToLatest()
             .eraseToAnyPublisher()
+    }
+}
+
+// MARK: - Notes Persistence
+
+extension BaseTerminalController {
+    /// Schedule a debounced save of notes content.
+    func scheduleNotesSave() {
+        guard !isLoadingNotes else { return }
+        notesSaveTimer?.invalidate()
+        notesSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            NotesPersistence.save(self.notesText, for: self.notesID)
+        }
+    }
+
+    /// Load notes from disk using the current notesID.
+    func loadNotes() {
+        isLoadingNotes = true
+        notesText = NotesPersistence.load(for: notesID)
+        isLoadingNotes = false
+    }
+
+    /// Flush any pending notes save. Called from subclass deinit.
+    func flushNotesSave() {
+        notesSaveTimer?.invalidate()
+        if !notesText.isEmpty {
+            NotesPersistence.save(notesText, for: notesID)
+        }
     }
 }
 
