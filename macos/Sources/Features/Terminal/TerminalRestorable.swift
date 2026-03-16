@@ -41,7 +41,7 @@ extension TerminalRestorable {
 
 /// The state stored for terminal window restoration.
 class TerminalRestorableState: TerminalRestorable {
-    class var version: Int { 8 }
+    class var version: Int { 7 }
 
     let focusedSurface: String?
     let surfaceTree: SplitTree<Ghostty.SurfaceView>
