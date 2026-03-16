@@ -51,6 +51,9 @@ class BaseTerminalController: NSWindowController,
     /// Set if the terminal view should show the update overlay.
     @Published var updateOverlayIsVisible: Bool = false
 
+    /// The task title for this tab, displayed at the top.
+    @Published var taskTitle: String = ""
+
     /// Unique ID for this tab's notes, persisted for window restoration.
     var notesID: UUID = UUID()
 

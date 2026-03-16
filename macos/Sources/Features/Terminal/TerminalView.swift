@@ -36,6 +36,9 @@ protocol TerminalViewModel: ObservableObject {
     /// The update overlay should be visible.
     var updateOverlayIsVisible: Bool { get }
 
+    /// The task title for this tab.
+    var taskTitle: String { get set }
+
     /// The notes text for this tab.
     var notesText: String { get set }
 
@@ -84,6 +87,11 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                     if Ghostty.info.mode == GHOSTTY_BUILD_MODE_DEBUG || Ghostty.info.mode == GHOSTTY_BUILD_MODE_RELEASE_SAFE {
                         DebugBuildWarningView()
                     }
+
+                    TaskTitleBar(
+                        text: $viewModel.taskTitle,
+                        onDismissFocus: { self.focused = true }
+                    )
 
                     TerminalSplitTreeView(
                         tree: viewModel.surfaceTree,

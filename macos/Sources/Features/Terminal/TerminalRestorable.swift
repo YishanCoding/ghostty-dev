@@ -48,6 +48,7 @@ class TerminalRestorableState: TerminalRestorable {
     let effectiveFullscreenMode: FullscreenMode?
     let tabColor: TerminalTabColor
     let titleOverride: String?
+    let taskTitle: String?
     let notesID: String?
     let notesIsVisible: Bool
 
@@ -57,6 +58,7 @@ class TerminalRestorableState: TerminalRestorable {
         self.effectiveFullscreenMode = controller.fullscreenStyle?.fullscreenMode
         self.tabColor = (controller.window as? TerminalWindow)?.tabColor ?? .none
         self.titleOverride = controller.titleOverride
+        self.taskTitle = controller.taskTitle.isEmpty ? nil : controller.taskTitle
         self.notesID = controller.notesID.uuidString
         self.notesIsVisible = controller.notesIsVisible
     }
@@ -67,6 +69,7 @@ class TerminalRestorableState: TerminalRestorable {
         self.effectiveFullscreenMode = other.effectiveFullscreenMode
         self.tabColor = other.tabColor
         self.titleOverride = other.titleOverride
+        self.taskTitle = other.taskTitle
         self.notesID = other.notesID
         self.notesIsVisible = other.notesIsVisible
     }

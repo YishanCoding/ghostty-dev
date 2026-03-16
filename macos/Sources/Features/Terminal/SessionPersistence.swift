@@ -37,6 +37,7 @@ enum SessionPersistence {
         let effectiveFullscreenMode: FullscreenMode?
         let tabColor: TerminalTabColor
         let titleOverride: String?
+        let taskTitle: String?
         let notesID: String?
         let notesIsVisible: Bool
 
@@ -46,6 +47,7 @@ enum SessionPersistence {
             self.effectiveFullscreenMode = controller.fullscreenStyle?.fullscreenMode
             self.tabColor = (controller.window as? TerminalWindow)?.tabColor ?? .none
             self.titleOverride = controller.titleOverride
+            self.taskTitle = controller.taskTitle.isEmpty ? nil : controller.taskTitle
             self.notesID = controller.notesID.uuidString
             self.notesIsVisible = controller.notesIsVisible
         }
@@ -199,6 +201,7 @@ enum SessionPersistence {
                     controller.loadNotes()
                 }
                 controller.notesIsVisible = tab.notesIsVisible
+                controller.taskTitle = tab.taskTitle ?? ""
 
                 // Restore focus
                 if let focusedStr = tab.focusedSurface {
