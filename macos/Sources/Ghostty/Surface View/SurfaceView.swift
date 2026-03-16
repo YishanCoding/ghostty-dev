@@ -411,75 +411,10 @@ extension Ghostty {
 
         var body: some View {
             GeometryReader { geo in
-                HStack(spacing: 4) {
-                    TextField("Search", text: $searchState.needle)
-                    .textFieldStyle(.plain)
-                    .frame(width: 180)
-                    .padding(.leading, 8)
-                    .padding(.trailing, 50)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.1))
-                    .cornerRadius(6)
-                    .focused($isSearchFieldFocused)
-                    .overlay(alignment: .trailing) {
-                        if let selected = searchState.selected {
-                            Text("\(selected + 1)/\(searchState.total, default: "?")")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
-                                .padding(.trailing, 8)
-                        } else if let total = searchState.total {
-                            Text("-/\(total)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
-                                .padding(.trailing, 8)
-                        }
-                    }
-#if canImport(AppKit)
-                    .onExitCommand {
-                        if searchState.needle.isEmpty {
-                            onClose()
-                        } else {
-                            Ghostty.moveFocus(to: surfaceView)
-                        }
-                    }
-#endif
-                    .backport.onKeyPress(.return) { modifiers in
-                        guard let surface = surfaceView.surface else { return .ignored }
-                        let action = modifiers.contains(.shift)
-                        ? "navigate_search:previous"
-                        : "navigate_search:next"
-                        ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
-                        return .handled
-                    }
-
-                    Button(action: {
-                        guard let surface = surfaceView.surface else { return }
-                        let action = "navigate_search:next"
-                        ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
-                    }, label: {
-                        Image(systemName: "chevron.up")
-                    })
-                    .buttonStyle(SearchButtonStyle())
-
-                    Button(action: {
-                        guard let surface = surfaceView.surface else { return }
-                        let action = "navigate_search:previous"
-                        ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
-                    }, label: {
-                        Image(systemName: "chevron.down")
-                    })
-                    .buttonStyle(SearchButtonStyle())
-
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                    }
-                    .buttonStyle(SearchButtonStyle())
-                }
+                searchBarContent
                 .padding(8)
                 .background(.background)
-                .clipShape(clipShape)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .shadow(radius: 4)
                 .onAppear {
                     isSearchFieldFocused = true
@@ -521,11 +456,75 @@ extension Ghostty {
             }
         }
 
-        private var clipShape: some Shape {
-            if #available(iOS 26.0, macOS 26.0, *) {
-                return ConcentricRectangle(corners: .concentric(minimum: 8), isUniform: true)
-            } else {
-                return RoundedRectangle(cornerRadius: 8)
+        private var searchBarContent: some View {
+            HStack(spacing: 4) {
+                searchTextField
+                Button(action: {
+                    guard let surface = surfaceView.surface else { return }
+                    let action = "navigate_search:next"
+                    ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
+                }, label: {
+                    Image(systemName: "chevron.up")
+                })
+                .buttonStyle(SearchButtonStyle())
+
+                Button(action: {
+                    guard let surface = surfaceView.surface else { return }
+                    let action = "navigate_search:previous"
+                    ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
+                }, label: {
+                    Image(systemName: "chevron.down")
+                })
+                .buttonStyle(SearchButtonStyle())
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(SearchButtonStyle())
+            }
+        }
+
+        private var searchTextField: some View {
+            TextField("Search", text: $searchState.needle)
+            .textFieldStyle(.plain)
+            .frame(width: 180)
+            .padding(.leading, 8)
+            .padding(.trailing, 50)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.1))
+            .cornerRadius(6)
+            .focused($isSearchFieldFocused)
+            .overlay(alignment: .trailing) {
+                if let selected = searchState.selected {
+                    Text("\(selected + 1)/\(searchState.total.map(String.init) ?? "?")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .padding(.trailing, 8)
+                } else if let total = searchState.total {
+                    Text("-/\(total)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .padding(.trailing, 8)
+                }
+            }
+#if canImport(AppKit)
+            .onExitCommand {
+                if searchState.needle.isEmpty {
+                    onClose()
+                } else {
+                    Ghostty.moveFocus(to: surfaceView)
+                }
+            }
+#endif
+            .backport.onKeyPress(.return) { modifiers in
+                guard let surface = surfaceView.surface else { return .ignored }
+                let action = modifiers.contains(.shift)
+                ? "navigate_search:previous"
+                : "navigate_search:next"
+                ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
+                return .handled
             }
         }
 

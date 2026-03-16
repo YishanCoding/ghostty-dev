@@ -65,6 +65,7 @@ struct SidebarView: View {
     var fields: Set<SidebarField> = SidebarField.defaultFields
 
     @AppStorage("SidebarShowCardBorder") private var showCardBorder: Bool = true
+    @AppStorage("SidebarFontSize") private var sidebarFontSize: Double = 12
     @State private var draggingTabID: ObjectIdentifier?
     @State private var dropTargetTabID: ObjectIdentifier?
 
@@ -119,6 +120,21 @@ struct SidebarView: View {
                             }
 
                             Toggle("Show Tab Border", isOn: $showCardBorder)
+
+                            Menu("Font Size") {
+                                ForEach([10, 12, 14, 16, 18] as [Double], id: \.self) { size in
+                                    Button {
+                                        sidebarFontSize = size
+                                    } label: {
+                                        let label = "\(Int(size))pt"
+                                        if sidebarFontSize == size {
+                                            Text("\(label) ✓")
+                                        } else {
+                                            Text(label)
+                                        }
+                                    }
+                                }
+                            }
 
                             Divider()
 
@@ -196,6 +212,14 @@ private struct SidebarTabCard: View {
     let fields: Set<SidebarField>
     var showCardBorder: Bool = true
 
+    /// Read font size directly from UserDefaults to avoid @AppStorage first-frame flash.
+    private var fontSize: CGFloat {
+        let v = UserDefaults.standard.double(forKey: "SidebarFontSize")
+        return CGFloat(v > 0 ? v : 12)
+    }
+    private var secondaryFontSize: CGFloat { max(fontSize - 2, 8) }
+    private var iconFontSize: CGFloat { max(fontSize - 3, 7) }
+
     private static let cardRadius: CGFloat = 8
 
     /// The accent color for the left border strip.
@@ -231,7 +255,7 @@ private struct SidebarTabCard: View {
                 if fields.contains(.title) {
                     HStack(spacing: 6) {
                         Text(tab.displayTitle)
-                            .font(.system(size: 12, weight: tab.isSelected ? .semibold : .regular))
+                            .font(.system(size: CGFloat(fontSize), weight: tab.isSelected ? .semibold : .regular))
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .foregroundColor(tab.isSelected ? theme.foreground : theme.secondaryText)
@@ -246,16 +270,17 @@ private struct SidebarTabCard: View {
                     }
                 }
 
-                // Directory name
-                if fields.contains(.directory), let dir = tab.directoryName {
+                // Directory name — always reserve space to prevent layout jump
+                if fields.contains(.directory) {
                     HStack(spacing: 4) {
                         Image(systemName: "folder")
-                            .font(.system(size: 9))
+                            .font(.system(size: iconFontSize))
                             .foregroundColor(theme.secondaryText)
-                        Text(dir)
-                            .font(.system(size: 10))
+                        Text(tab.directoryName ?? " ")
+                            .font(.system(size: secondaryFontSize))
                             .foregroundColor(theme.secondaryText)
                             .lineLimit(1)
+                            .opacity(tab.directoryName != nil ? 1 : 0)
                     }
                 }
 
@@ -263,10 +288,10 @@ private struct SidebarTabCard: View {
                 if fields.contains(.gitBranch), let branch = tab.gitBranch {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.branch")
-                            .font(.system(size: 9))
+                            .font(.system(size: iconFontSize))
                             .foregroundColor(theme.secondaryText)
                         Text(branch)
-                            .font(.system(size: 10))
+                            .font(.system(size: secondaryFontSize))
                             .foregroundColor(theme.secondaryText)
                             .lineLimit(1)
                     }
@@ -278,11 +303,11 @@ private struct SidebarTabCard: View {
                         HStack(spacing: 4) {
                             if let icon = entry.icon {
                                 Image(systemName: icon)
-                                    .font(.system(size: 9))
+                                    .font(.system(size: iconFontSize))
                                     .foregroundColor(theme.secondaryText)
                             }
                             Text(entry.value)
-                                .font(.system(size: 10))
+                                .font(.system(size: secondaryFontSize))
                                 .foregroundColor(theme.secondaryText)
                                 .lineLimit(1)
                         }
