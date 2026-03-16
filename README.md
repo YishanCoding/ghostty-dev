@@ -1,15 +1,50 @@
-**Personal fork of [Ghostty](https://github.com/ghostty-org/ghostty)** with a sidebar tab system for macOS. Not affiliated with the upstream project. For the official Ghostty terminal, visit [ghostty.org](https://ghostty.org).
+**Ghostty Dev** — a fork of [tomreinert/ghostty](https://github.com/tomreinert/ghostty) (which itself forks the [official Ghostty terminal](https://github.com/ghostty-org/ghostty)). Not affiliated with upstream. For the official Ghostty, visit [ghostty.org](https://ghostty.org).
 
-🧪 **Experimental**  
-Please note that this is experimental and I built it for my own use. It works fine for me, but feel free and try to break it.
+> **Upstream features (from tomreinert/ghostty):** Sidebar tab system with rich tab cards, drag-and-drop reorder, git branch detection, custom status entries via CLI (`ghosttyctl`), theme-aware colors, and tab color selection.
 
-🐛 **Known bugs**  
-~~- Unread indicator does not clear correctly, and might re-appear when switching tabs~~
+## What Ghostty Dev adds
 
-<img width="1125" height="749" alt="ghostty-sidebar" src="https://github.com/user-attachments/assets/919a9220-4e07-4b2e-b491-c9d385b6585f" />
+This fork extends the sidebar-enabled Ghostty with productivity features for developers who use the terminal as a workspace.
 
+### Per-Tab Notes Panel
 
-## Sidebar
+Toggle a side panel per tab to jot down notes, commands, or context — persisted across restarts.
+
+- **Toggle:** `Cmd+Shift+N` or View menu → Toggle Notes
+- **Per-tab isolation** — each tab has its own notes
+- **Persistent** — notes saved to `~/.config/ghosttydev/notes/` as individual files
+- **macOS 13+ compatible**
+
+### Task Title Bar
+
+A thin bar at the top of each tab displaying the current task context (e.g. Linear issue, project name).
+
+- **Toggle:** `Cmd+Shift+M` or View menu (hidden by default)
+- **Color strip** — visual indicator derived from task metadata
+- **Notes width constrained** to the first pane
+
+### Independent Session Persistence
+
+Replaced macOS `NSWindowRestoration` with a custom JSON-based session persistence system.
+
+- **Restart-idempotent** — multiple restarts produce the exact same window/tab state
+- **Saves on every state change** — tab reorder, title change, panel toggle
+- **Tab order preserved** — tabs restore in the correct sequence
+- **Backward-compatible decoder** — new fields have safe defaults, old sessions load without issues
+- **Isolated storage** — session data at `~/.config/ghosttydev/session.json`, no conflict with upstream Ghostty
+
+### Ghostty Dev Variant
+
+Runs as a separate app alongside the official Ghostty:
+
+- **Distinct bundle ID and display name** (`Ghostty Dev`)
+- **Separate config directory** (`~/.config/ghosttydev/`)
+- **Swift 6.2 / Xcode 16.3 compatible**
+
+## Upstream Sidebar Features
+
+<details>
+<summary>Sidebar tab system (from tomreinert/ghostty)</summary>
 
 Replaces the native tab bar with a left sidebar showing rich tab cards:
 
@@ -19,14 +54,14 @@ Replaces the native tab bar with a left sidebar showing rich tab cards:
 - **Drag-and-drop** — reorder tabs by dragging
 - **Theme-aware** — colors derived from your terminal theme
 
-### Config
+#### Config
 
 ```
 # Choose which fields to show (default: all)
 sidebar-fields = title,directory,git-branch,status
 ```
 
-### CLI
+#### CLI
 
 Install: symlink `cli/ghosttyctl` to somewhere on your PATH (e.g. `~/.local/bin/ghosttyctl`).
 
@@ -39,14 +74,7 @@ ghosttyctl list                                               # list all tabs
 ghosttyctl current                                            # current tab info
 ```
 
-### Claude Code
-
-Add to your `~/.claude/CLAUDE.md` so Claude Code can name its tabs and set status:
-
-```markdown
-- Rename the workspace using: `ghosttyctl rename "Claude: <name>"`. Name it after the work being done.
-- Set sidebar status entries using `ghosttyctl set-status <key> <value> [--icon <sf-symbol>]` and clear with `ghosttyctl clear-status <key>`.
-```
+</details>
 
 ---
 
