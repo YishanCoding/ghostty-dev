@@ -12,14 +12,12 @@ struct NotesPanel: View {
         VStack(spacing: 0) {
             Divider()
 
-            TextEditor(text: $text)
+            textEditor
                 .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
                 .frame(height: 90)
                 .focused($isFocused)
                 .onAppear { isFocused = true }
-                .onKeyPress(.escape) {
+                .backport.onKeyPress(.escape) { _ in
                     isFocused = false
                     onDismissFocus()
                     return .handled
@@ -34,6 +32,18 @@ struct NotesPanel: View {
                             .allowsHitTesting(false)
                     }
                 }
+        }
+    }
+
+    @ViewBuilder
+    private var textEditor: some View {
+        if #available(macOS 14, *) {
+            TextEditor(text: $text)
+                .scrollContentBackground(.hidden)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+        } else {
+            TextEditor(text: $text)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
         }
     }
 }
