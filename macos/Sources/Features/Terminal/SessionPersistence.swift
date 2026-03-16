@@ -232,20 +232,22 @@ enum SessionPersistence {
                 if index == 0 {
                     firstController = controller
                     lastWindow = window
-                    window.setFrame(windowState.frame.nsRect, display: true)
+                    window.setFrame(windowState.frame.nsRect, display: false)
                     controller.showWindow(nil)
                 } else if let prevWindow = lastWindow {
-                    // Add after the previous tab to preserve order
-                    controller.showWindow(nil)
+                    // Add to tab group without showing as a standalone window first
                     prevWindow.addTabbedWindowSafely(window, ordered: .above)
                     lastWindow = window
                 }
             }
 
-            // Select the correct tab
+            // Select the correct tab without animation
             if let tabGroup = firstController?.window?.tabGroup,
                windowState.selectedTabIndex < tabGroup.windows.count {
+                NSAnimationContext.beginGrouping()
+                NSAnimationContext.current.duration = 0
                 tabGroup.windows[windowState.selectedTabIndex].makeKeyAndOrderFront(nil)
+                NSAnimationContext.endGrouping()
             }
 
             // Restore fullscreen (non-native only; native fullscreen can't be set programmatically this way)

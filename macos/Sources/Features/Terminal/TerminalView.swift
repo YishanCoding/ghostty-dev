@@ -116,9 +116,9 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                                         onDismissFocus: { self.focused = true }
                                     )
                                     .frame(width: firstPaneWidth)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
                                     Spacer(minLength: 0)
                                 }
+                                .transition(.move(edge: .top).combined(with: .opacity))
                             }
 
                             TerminalSplitTreeView(
@@ -151,9 +151,9 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                                         onDismissFocus: { self.focused = true }
                                     )
                                     .frame(width: firstPaneWidth)
-                                    .transition(.move(edge: .bottom).combined(with: .opacity))
                                     Spacer(minLength: 0)
                                 }
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
                     }

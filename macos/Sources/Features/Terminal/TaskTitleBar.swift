@@ -84,7 +84,9 @@ struct TaskTitleBar: View {
     }
 
     private func commitEdit() {
-        text = draft
+        guard isEditing else { return }
+        let newText = draft
+        text = newText
         isEditing = false
         isFocused = false
         onDismissFocus()

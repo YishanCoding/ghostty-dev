@@ -53,12 +53,18 @@ class BaseTerminalController: NSWindowController,
 
     /// The task title for this tab, displayed at the top.
     @Published var taskTitle: String = "" {
-        didSet { scheduleSessionSave() }
+        didSet {
+            guard !SessionPersistence.isRestoring else { return }
+            scheduleSessionSave()
+        }
     }
 
     /// Whether the task title bar is visible for this tab.
     @Published var taskTitleIsVisible: Bool = false {
-        didSet { SessionPersistence.save() }
+        didSet {
+            guard !SessionPersistence.isRestoring else { return }
+            scheduleSessionSave()
+        }
     }
 
     /// The tab color, read from the window.
@@ -76,7 +82,10 @@ class BaseTerminalController: NSWindowController,
 
     /// Whether the notes panel is visible for this tab.
     @Published var notesIsVisible: Bool = false {
-        didSet { SessionPersistence.save() }
+        didSet {
+            guard !SessionPersistence.isRestoring else { return }
+            scheduleSessionSave()
+        }
     }
 
     /// Debounce timer for auto-saving notes.
