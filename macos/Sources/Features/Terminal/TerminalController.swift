@@ -156,9 +156,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     override func surfaceTreeDidChange(from: SplitTree<Ghostty.SurfaceView>, to: SplitTree<Ghostty.SurfaceView>) {
         super.surfaceTreeDidChange(from: from, to: to)
 
-        // Whenever our surface tree changes in any way (new split, close split, etc.)
-        // we want to invalidate our state.
-        invalidateRestorableState()
+        // Save session state on any tree change (new split, close split, etc.)
+        SessionPersistence.save()
 
         // Update our zoom state
         if let window = window as? TerminalWindow {
@@ -1056,12 +1055,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // use whatever the latest app-level config is.
         let config = ghostty.config
 
-        // Setting all three of these is required for restoration to work.
-        window.isRestorable = restorable
-        if restorable {
-            window.restorationClass = TerminalWindowRestoration.self
-            window.identifier = .init(String(describing: TerminalWindowRestoration.self))
-        }
+        // Disable macOS built-in restoration — we use independent JSON persistence instead.
+        window.isRestorable = false
 
         // If we have only a single surface (no splits) and there is a default size then
         // we should resize to that default size.
@@ -1310,10 +1305,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     // Called when the window will be encoded. We handle the data encoding here in the
-    // window controller.
+    // window controller — save via independent JSON persistence.
     func window(_ window: NSWindow, willEncodeRestorableState state: NSCoder) {
-        let data = TerminalRestorableState(from: self)
-        data.encode(with: state)
+        SessionPersistence.save()
     }
 
     // MARK: First Responder

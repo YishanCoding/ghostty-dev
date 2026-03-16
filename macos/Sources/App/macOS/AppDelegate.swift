@@ -344,13 +344,16 @@ class AppDelegate: NSObject,
         if !applicationHasBecomeActive {
             applicationHasBecomeActive = true
 
-            // Let's launch our first window. We only do this if we have no other windows. It
-            // is possible to have other windows in a few scenarios:
-            //   - if we're opening a URL since `application(_:openFile:)` is called before this.
-            //   - if we're restoring from persisted state
+            // Try to restore windows from our independent JSON session state.
+            // Only create a new window if restoration didn't produce any windows.
             if TerminalController.all.isEmpty && derivedConfig.initialWindow {
                 undoManager.disableUndoRegistration()
-                _ = TerminalController.newWindow(ghostty)
+                if ghostty.config.windowSaveState != "never" {
+                    SessionPersistence.restore(ghostty: ghostty)
+                }
+                if TerminalController.all.isEmpty {
+                    _ = TerminalController.newWindow(ghostty)
+                }
                 undoManager.enableUndoRegistration()
             }
         }
@@ -419,6 +422,11 @@ class AppDelegate: NSObject,
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Save session state before quitting
+        if ghostty.config.windowSaveState != "never" {
+            SessionPersistence.save()
+        }
+
         GhosttyIPCServer.shared.stop()
 
         // We have no notifications we want to persist after death,
