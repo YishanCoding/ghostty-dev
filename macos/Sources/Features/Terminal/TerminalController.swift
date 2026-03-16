@@ -79,6 +79,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Debounce timer for auto-saving notes.
     private var notesSaveTimer: Timer?
 
+    /// Guard flag to suppress save during notes load.
+    private var isLoadingNotes = false
+
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
@@ -158,6 +161,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     deinit {
+        // Flush any pending notes save
+        notesSaveTimer?.invalidate()
+        if !notesText.isEmpty {
+            NotesPersistence.save(notesText, for: notesID)
+        }
+
         // Remove all of our notificationcenter subscriptions
         let center = NotificationCenter.default
         center.removeObserver(self)
@@ -1462,13 +1471,16 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     @IBAction func toggleNotes(_ sender: Any?) {
-        notesIsVisible.toggle()
+        withAnimation {
+            notesIsVisible.toggle()
+        }
     }
 
     // MARK: - Notes Persistence
 
     /// Schedule a debounced save of notes content.
     private func scheduleNotesSave() {
+        guard !isLoadingNotes else { return }
         notesSaveTimer?.invalidate()
         notesSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
             guard let self else { return }
@@ -1478,7 +1490,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
     /// Load notes from disk using the current notesID.
     func loadNotes() {
+        isLoadingNotes = true
         notesText = NotesPersistence.load(for: notesID)
+        isLoadingNotes = false
     }
 
     // MARK: - TerminalViewDelegate
