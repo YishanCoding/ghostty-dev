@@ -2,13 +2,13 @@ import Cocoa
 import OSLog
 
 /// Manages independent JSON-based session persistence for terminal windows and tabs.
-/// Replaces macOS NSWindowRestoration with a user-controlled file at ~/.config/ghostty/sessions/.
+/// Replaces macOS NSWindowRestoration with a user-controlled file at ~/.config/ghosttydev/sessions/.
 enum SessionPersistence {
     private static let logger = Logger(subsystem: "com.mitchellh.ghostty", category: "session")
 
     private static let sessionsDirectory: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appendingPathComponent(".config/ghostty/sessions", isDirectory: true)
+        return home.appendingPathComponent(".config/ghosttydev/sessions", isDirectory: true)
     }()
 
     private static var stateFileURL: URL {

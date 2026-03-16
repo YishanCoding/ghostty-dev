@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-/// Manages reading and writing per-tab notes to ~/.config/ghostty/notes/
+/// Manages reading and writing per-tab notes to ~/.config/ghosttydev/notes/
 enum NotesPersistence {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.mitchellh.ghostty",
@@ -10,7 +10,7 @@ enum NotesPersistence {
 
     private static let notesDirectory: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appendingPathComponent(".config/ghostty/notes", isDirectory: true)
+        return home.appendingPathComponent(".config/ghosttydev/notes", isDirectory: true)
     }()
 
     /// Ensure the notes directory exists.
