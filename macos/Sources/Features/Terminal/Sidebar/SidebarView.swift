@@ -74,92 +74,106 @@ struct SidebarView: View {
             LazyVStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(tabManager.tabs.enumerated()), id: \.element.id) { index, tab in
                     SidebarTabCard(tab: tab, theme: theme, fields: fields, showCardBorder: showCardBorder)
-                        .contentShape(Rectangle())
-                        .opacity(draggingTabID == tab.id ? 0.4 : 1.0)
-                        .overlay(alignment: .top) {
-                            if dropTargetTabID == tab.id && draggingTabID != tab.id {
-                                Rectangle()
-                                    .fill(Color.accentColor)
-                                    .frame(height: 2)
-                                    .offset(y: -3)
+                            .contentShape(Rectangle())
+                            .opacity(draggingTabID == tab.id ? 0.4 : 1.0)
+                            .background(
+                                GeometryReader { geo -> Color in
+                                    if tab.isSelected {
+                                        let y = geo.frame(in: .named("sidebar")).origin.y
+                                        if abs(y - tabManager.selectedTabYOffset) > 1 {
+                                            DispatchQueue.main.async {
+                                                tabManager.selectedTabYOffset = y
+                                            }
+                                        }
+                                    }
+                                    return Color.clear
+                                }
+                            )
+                            .overlay(alignment: .top) {
+                                if dropTargetTabID == tab.id && draggingTabID != tab.id {
+                                    Rectangle()
+                                        .fill(Color.accentColor)
+                                        .frame(height: 2)
+                                        .offset(y: -3)
+                                }
                             }
-                        }
-                        .onTapGesture {
-                            tabManager.selectTab(tab)
-                        }
-                        .onDrag {
-                            draggingTabID = tab.id
-                            return NSItemProvider(object: "\(index)" as NSString)
-                        }
-                        .onDrop(of: [UTType.text], delegate: TabDropDelegate(
-                            tabManager: tabManager,
-                            currentTab: tab,
-                            currentIndex: index,
-                            draggingTabID: $draggingTabID,
-                            dropTargetTabID: $dropTargetTabID
-                        ))
-                        .contextMenu {
-                            Button("Rename Tab...") {
-                                tabManager.promptRenameTab(tab)
+                            .onTapGesture {
+                                tabManager.selectTab(tab)
                             }
+                            .onDrag {
+                                draggingTabID = tab.id
+                                return NSItemProvider(object: "\(index)" as NSString)
+                            }
+                            .onDrop(of: [UTType.text], delegate: TabDropDelegate(
+                                tabManager: tabManager,
+                                currentTab: tab,
+                                currentIndex: index,
+                                draggingTabID: $draggingTabID,
+                                dropTargetTabID: $dropTargetTabID
+                            ))
+                            .contextMenu {
+                                Button("Rename Tab...") {
+                                    tabManager.promptRenameTab(tab)
+                                }
 
-                            Divider()
+                                Divider()
 
-                            Menu("Tab Color") {
-                                ForEach(TerminalTabColor.allCases, id: \.self) { color in
-                                    Button {
-                                        tabManager.setTabColor(color, for: tab)
-                                    } label: {
-                                        Label {
-                                            Text(color.localizedName)
-                                        } icon: {
-                                            Image(nsImage: color.swatchImage(selected: color == tab.tabColor))
+                                Menu("Tab Color") {
+                                    ForEach(TerminalTabColor.allCases, id: \.self) { color in
+                                        Button {
+                                            tabManager.setTabColor(color, for: tab)
+                                        } label: {
+                                            Label {
+                                                Text(color.localizedName)
+                                            } icon: {
+                                                Image(nsImage: color.swatchImage(selected: color == tab.tabColor))
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            Toggle("Show Tab Border", isOn: $showCardBorder)
+                                Toggle("Show Tab Border", isOn: $showCardBorder)
 
-                            Menu("Font Size") {
-                                ForEach([10, 12, 14, 16, 18] as [Double], id: \.self) { size in
-                                    Button {
-                                        sidebarFontSize = size
-                                    } label: {
-                                        let label = "\(Int(size))pt"
-                                        if sidebarFontSize == size {
-                                            Text("\(label) ✓")
-                                        } else {
-                                            Text(label)
+                                Menu("Font Size") {
+                                    ForEach([10, 12, 14, 16, 18] as [Double], id: \.self) { size in
+                                        Button {
+                                            sidebarFontSize = size
+                                        } label: {
+                                            let label = "\(Int(size))pt"
+                                            if sidebarFontSize == size {
+                                                Text("\(label) ✓")
+                                            } else {
+                                                Text(label)
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            Divider()
+                                Divider()
 
-                            Button("Close Tab") {
-                                tabManager.closeTab(tab)
-                            }
+                                Button("Close Tab") {
+                                    tabManager.closeTab(tab)
+                                }
 
-                            Button("Close Other Tabs") {
-                                tabManager.closeOtherTabs(tab)
-                            }
-                            .disabled(tabManager.tabs.count <= 1)
+                                Button("Close Other Tabs") {
+                                    tabManager.closeOtherTabs(tab)
+                                }
+                                .disabled(tabManager.tabs.count <= 1)
 
-                            Button("Close Tabs to the Right") {
-                                tabManager.closeTabsToTheRight(of: tab)
+                                Button("Close Tabs to the Right") {
+                                    tabManager.closeTabsToTheRight(of: tab)
+                                }
+                                .disabled({
+                                    guard let idx = tabManager.tabs.firstIndex(where: { $0.id == tab.id }) else { return true }
+                                    return idx >= tabManager.tabs.count - 1
+                                }())
                             }
-                            .disabled({
-                                guard let idx = tabManager.tabs.firstIndex(where: { $0.id == tab.id }) else { return true }
-                                return idx >= tabManager.tabs.count - 1
-                            }())
-                        }
+                    }
                 }
-            }
-            .padding(.horizontal, 8)
+                .padding(.horizontal, 8)
             .padding(.top, 8)
         }
+        .coordinateSpace(name: "sidebar")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.background)
     }

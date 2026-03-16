@@ -39,6 +39,15 @@ class SidebarTabManager: ObservableObject {
 
     @Published var tabs: [TabItem] = []
 
+    /// The detected state of the selected tab's first pane.
+    @Published var selectedPaneState: PaneState = .unknown
+
+    /// Y offset of the selected tab in the sidebar, for action panel alignment.
+    @Published var selectedTabYOffset: CGFloat = 0
+
+    /// Guard flag to prevent double-invocation of Launch CC within a single poll cycle.
+    @Published private(set) var isLaunchingCC: Bool = false
+
     /// Windows that need attention, cleared when the tab is selected.
     private var attentionWindows: Set<ObjectIdentifier> = []
 
@@ -204,6 +213,146 @@ class SidebarTabManager: ObservableObject {
         if newTabs != tabs {
             tabs = newTabs
         }
+
+        // Update pane state for the selected tab
+        updateSelectedPaneState(selectedWindow: selectedWindow)
+    }
+
+    // MARK: - Pane State Detection
+
+    /// The UUID prefix (first 8 chars) of the selected tab's first pane surface.
+    var selectedTabUUIDPrefix: String? {
+        guard let window else { return nil }
+        let selectedWindow = window.tabGroup?.selectedWindow ?? window
+        guard let controller = selectedWindow.windowController as? BaseTerminalController,
+              let root = controller.surfaceTree.root else { return nil }
+        let firstPane = root.leftmostLeaf()
+        return String(firstPane.id.uuidString.prefix(8))
+    }
+
+    /// Cached result of async CC detection, updated in background.
+    private var cachedCCRunning: Bool = false
+    /// Whether an async CC check is already in flight.
+    private var ccCheckInFlight: Bool = false
+
+    private func updateSelectedPaneState(selectedWindow: NSWindow) {
+        guard let controller = selectedWindow.windowController as? BaseTerminalController,
+              let root = controller.surfaceTree.root else {
+            selectedPaneState = .unknown
+            return
+        }
+
+        let firstPane = root.leftmostLeaf()
+        let title = firstPane.title
+        let uuidPrefix = String(firstPane.id.uuidString.prefix(8))
+
+        let lower = title.lowercased()
+
+        // Detect if pane is INSIDE tmux based on title
+        let inTmux = title.contains(uuidPrefix) || lower.contains("tmux")
+
+        let newState: PaneState
+        if inTmux {
+            if lower.contains("claude") || cachedCCRunning {
+                newState = .ccRunning
+            } else {
+                newState = .tmuxRunning
+            }
+            // Kick off async CC check (non-blocking)
+            checkCCAsync(sessionName: uuidPrefix)
+        } else {
+            cachedCCRunning = false
+            newState = .idle
+        }
+
+        if newState != selectedPaneState {
+            selectedPaneState = newState
+            isLaunchingCC = false
+        }
+    }
+
+    /// Async check if CC is running — never blocks the main thread.
+    private func checkCCAsync(sessionName: String) {
+        guard !ccCheckInFlight else { return }
+        ccCheckInFlight = true
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let running = Self.isCCRunningInSession(sessionName)
+            DispatchQueue.main.async {
+                self?.ccCheckInFlight = false
+                guard self?.cachedCCRunning != running else { return }
+                self?.cachedCCRunning = running
+                // Trigger state re-evaluation on next refresh
+                self?.refresh()
+            }
+        }
+    }
+
+    /// Check if "claude" is a direct child process of the tmux pane's shell.
+    /// Runs on a background thread — safe to call waitUntilExit().
+    private static func isCCRunningInSession(_ sessionName: String) -> Bool {
+        let pipe = Pipe()
+        let getPid = Process()
+        getPid.executableURL = URL(fileURLWithPath: "/bin/sh")
+        getPid.arguments = ["-l", "-c", "tmux list-panes -t \(sessionName) -F '#{pane_pid}' 2>/dev/null | head -1"]
+        getPid.standardOutput = pipe
+        getPid.standardError = FileHandle.nullDevice
+        try? getPid.run()
+        getPid.waitUntilExit()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let pidStr = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !pidStr.isEmpty else { return false }
+
+        let check = Process()
+        check.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        check.arguments = ["-P", pidStr, "claude"]
+        check.standardOutput = FileHandle.nullDevice
+        check.standardError = FileHandle.nullDevice
+        try? check.run()
+        check.waitUntilExit()
+        return check.terminationStatus == 0
+    }
+
+    // MARK: - Action Panel Actions
+
+    func launchTmux() {
+        guard let uuidPrefix = selectedTabUUIDPrefix,
+              let surfaceModel = selectedFirstPaneSurfaceModel() else { return }
+        // -A flag: attach if session exists, create if not (idempotent).
+        // Runs in user's shell so PATH always includes tmux.
+        surfaceModel.sendText("tmux new-session -A -s \(uuidPrefix)\n")
+    }
+
+    func launchCC() {
+        guard !isLaunchingCC,
+              let uuidPrefix = selectedTabUUIDPrefix,
+              let surfaceModel = selectedFirstPaneSurfaceModel() else { return }
+        isLaunchingCC = true
+        surfaceModel.sendText("export AGENT_BROWSER_TABNAME=\(uuidPrefix) && claude --dangerously-skip-permissions\n")
+    }
+
+    func detachTmux() {
+        guard let uuidPrefix = selectedTabUUIDPrefix else { return }
+        // Run detach via user's login shell to ensure PATH includes tmux.
+        // Uses -s flag to target the specific session, works even when
+        // an interactive app (CC, vim) is running in the pane.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-l", "-c", "tmux detach-client -s \(uuidPrefix)"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+    }
+
+    /// Get the Ghostty.Surface model for the first pane of the selected tab.
+    private func selectedFirstPaneSurfaceModel() -> Ghostty.Surface? {
+        guard let window else { return nil }
+        let selectedWindow = window.tabGroup?.selectedWindow ?? window
+        guard let controller = selectedWindow.windowController as? BaseTerminalController,
+              let root = controller.surfaceTree.root else { return nil }
+        let firstPane = root.leftmostLeaf()
+        return firstPane.surfaceModel
     }
 
     // MARK: - Tab Actions

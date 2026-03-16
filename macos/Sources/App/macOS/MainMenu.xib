@@ -368,6 +368,12 @@
                                     <action selector="toggleNotes:" target="-1" id="nts-ac-Tgl"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Toggle Action Panel" keyEquivalent="a" id="act-pn-Tgl">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES" shift="YES"/>
+                                <connections>
+                                    <action selector="toggleActionPanel:" target="-1" id="act-ac-Tgl"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="Vkj-tP-dMZ"/>
                             <menuItem title="Quick Terminal" id="1pv-LF-NBJ">
                                 <modifierMask key="keyEquivalentModifierMask"/>
