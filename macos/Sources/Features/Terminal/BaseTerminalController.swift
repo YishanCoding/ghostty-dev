@@ -52,7 +52,9 @@ class BaseTerminalController: NSWindowController,
     @Published var updateOverlayIsVisible: Bool = false
 
     /// The task title for this tab, displayed at the top.
-    @Published var taskTitle: String = ""
+    @Published var taskTitle: String = "" {
+        didSet { SessionPersistence.save() }
+    }
 
     /// Whether the task title bar is visible for this tab.
     @Published var taskTitleIsVisible: Bool = false
