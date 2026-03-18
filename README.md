@@ -90,6 +90,55 @@ Runs as a separate app alongside the official Ghostty:
 - **Separate config directory** (`~/.config/ghosttydev/`)
 - **Swift 6.2 / Xcode 16.3 compatible**
 
+## Installation
+
+### Prerequisites
+
+- macOS 13+
+- Xcode 16.3+ (Swift 6.2)
+- tmux (for session management)
+- Python 3 (for progress log CLI)
+
+### Build from source
+
+```bash
+git clone https://github.com/user/ghostty-dev.git
+cd ghostty-dev
+
+# Build release
+xcodebuild -project "macos/Ghostty Dev.xcodeproj" \
+    -scheme "Ghostty Dev" \
+    -configuration Release \
+    -derivedDataPath /tmp/ghostty-build build
+
+# Sign (ad-hoc, for local use)
+codesign --force --deep --sign - \
+    "/tmp/ghostty-build/Build/Products/Release/Ghostty Dev.app"
+
+# Install
+cp -R "/tmp/ghostty-build/Build/Products/Release/Ghostty Dev.app" \
+    "/Applications/Ghostty Dev.app"
+```
+
+Ghostty Dev runs alongside the official Ghostty — separate bundle ID, separate config.
+
+### Install the progress log CLI
+
+```bash
+cp tools/scripts/ghostty_progress.py ~/.claude/scripts/ghostty_progress.py
+chmod +x ~/.claude/scripts/ghostty_progress.py
+```
+
+### Install the Claude Code skill
+
+```bash
+# Create skills directory if needed
+mkdir -p ~/.claude/skills
+
+# Symlink so the skill stays in sync with repo updates
+ln -s "$(pwd)/tools/skills/progress-update" ~/.claude/skills/progress-update
+```
+
 ## Loading Skills
 
 Ghostty Dev ships with a Claude Code skill for automatic progress reporting. To use it:
