@@ -40,7 +40,7 @@ struct TaskTitleBar: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(height: 44)
-            .background(Color.primary.opacity(0.04))
+            .background(Color(nsColor: .windowBackgroundColor))
 
             Divider()
         }

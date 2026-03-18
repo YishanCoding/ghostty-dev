@@ -28,3 +28,5 @@ vgcore.*
 
 
 CLAUDE.md
+.claude/
+docs/

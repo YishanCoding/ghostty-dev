@@ -2,6 +2,29 @@ import SwiftUI
 import GhosttyKit
 import os
 
+// MARK: - First Pane Top Inset Environment
+
+/// Environment key for passing the overlay height down the split tree.
+/// Only the leftmost leaf pane applies this as top padding.
+struct FirstPaneTopInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var firstPaneTopInset: CGFloat {
+        get { self[FirstPaneTopInsetKey.self] }
+        set { self[FirstPaneTopInsetKey.self] = newValue }
+    }
+}
+
+/// Preference key to measure the overlay height.
+private struct OverlayHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 /// This delegate is notified of actions and property changes regarding the terminal view. This
 /// delegate is optional and can be used by a TerminalView caller to react to changes such as
 /// titles being set, cell sizes being changed, etc.
@@ -45,6 +68,9 @@ protocol TerminalViewModel: ObservableObject {
     /// The tab color for display in task title bar.
     var currentTabColor: TerminalTabColor { get }
 
+    /// The progress log watcher for this tab.
+    var progressLogWatcher: ProgressLogWatcher? { get }
+
     /// The notes text for this tab.
     var notesText: String { get set }
 
@@ -67,6 +93,9 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
 
     // This seems like a crutch after switching from SwiftUI to AppKit lifecycle.
     @FocusState private var focused: Bool
+
+    /// Measured height of the overlay (TaskTitleBar + ProgressLogView) for first-pane inset.
+    @State private var overlayHeight: CGFloat = 0
 
     // Various state values sent back up from the currently focused terminals.
     @FocusedValue(\.ghosttySurfaceView) private var focusedSurface
@@ -108,22 +137,32 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                         let firstPaneWidth = firstPaneWidth(in: geo.size.width)
 
                         VStack(spacing: 0) {
-                            if viewModel.taskTitleIsVisible {
-                                HStack(spacing: 0) {
-                                    TaskTitleBar(
-                                        text: $viewModel.taskTitle,
-                                        tabColor: viewModel.currentTabColor,
-                                        onDismissFocus: { self.focused = true }
-                                    )
-                                    .frame(width: firstPaneWidth)
-                                    Spacer(minLength: 0)
-                                }
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-
                             TerminalSplitTreeView(
                                 tree: viewModel.surfaceTree,
                                 action: { delegate?.performSplitAction($0) })
+                                .overlay(alignment: .topLeading) {
+                                    VStack(spacing: 0) {
+                                        if viewModel.taskTitleIsVisible {
+                                            TaskTitleBar(
+                                                text: $viewModel.taskTitle,
+                                                tabColor: viewModel.currentTabColor,
+                                                onDismissFocus: { self.focused = true }
+                                            )
+                                        }
+                                        if let watcher = viewModel.progressLogWatcher {
+                                            ProgressLogView(
+                                                watcher: watcher,
+                                                onDismissFocus: { self.focused = true }
+                                            )
+                                        }
+                                    }
+                                    .frame(width: firstPaneWidth)
+                                    .background(GeometryReader { geo in
+                                        Color.clear.preference(key: OverlayHeightKey.self, value: geo.size.height)
+                                    })
+                                }
+                                .onPreferenceChange(OverlayHeightKey.self) { overlayHeight = $0 }
+                                .environment(\.firstPaneTopInset, overlayHeight)
                                 .environmentObject(ghostty)
                                 .ghosttyLastFocusedSurface(lastFocusedSurface)
                                 .focused($focused)

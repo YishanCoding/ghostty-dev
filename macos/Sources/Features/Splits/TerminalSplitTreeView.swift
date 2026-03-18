@@ -76,6 +76,7 @@ private struct TerminalSplitSubtreeView: View {
                 },
                 right: {
                     TerminalSplitSubtreeView(node: split.right, action: action)
+                        .environment(\.firstPaneTopInset, 0)
                 },
                 onEqualize: {
                     guard let surface = node.leftmostLeaf().surface else { return }
@@ -91,6 +92,7 @@ private struct TerminalSplitLeaf: View {
     let isSplit: Bool
     let action: (TerminalSplitOperation) -> Void
 
+    @Environment(\.firstPaneTopInset) private var topInset
     @State private var dropState: DropState = .idle
     @State private var isSelfDragging: Bool = false
 
@@ -99,6 +101,7 @@ private struct TerminalSplitLeaf: View {
             Ghostty.InspectableSurface(
                 surfaceView: surfaceView,
                 isSplit: isSplit)
+            .padding(.top, topInset)
             .background {
                 // If we're dragging ourself, we hide the entire drop zone. This makes
                 // it so that a released drop animates back to its source properly

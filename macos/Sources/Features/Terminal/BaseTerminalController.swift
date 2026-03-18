@@ -80,6 +80,9 @@ class BaseTerminalController: NSWindowController,
         didSet { scheduleNotesSave() }
     }
 
+    /// The progress log watcher for this tab, monitoring the file-based progress log.
+    var progressLogWatcher: ProgressLogWatcher?
+
     /// Whether the notes panel is visible for this tab.
     @Published var notesIsVisible: Bool = false {
         didSet {
@@ -193,6 +196,12 @@ class BaseTerminalController: NSWindowController,
         let surfaceUUID = UUID()
         config.environmentVariables["GHOSTTY_TAB_ID"] = surfaceUUID.uuidString
         self.surfaceTree = tree ?? .init(view: Ghostty.SurfaceView(ghostty_app, baseConfig: config, uuid: surfaceUUID))
+
+        // Initialize progress log watcher using the leftmost pane's UUID
+        if let root = surfaceTree.root {
+            let uuidPrefix = String(root.leftmostLeaf().id.uuidString.prefix(8))
+            progressLogWatcher = ProgressLogWatcher(sessionName: "GHOSTTYDEV-\(uuidPrefix)")
+        }
 
         // Setup our bell state for the window
         setupBellNotificationPublisher()

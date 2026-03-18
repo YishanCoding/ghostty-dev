@@ -4,7 +4,58 @@
 
 ## What Ghostty Dev adds
 
-This fork extends the sidebar-enabled Ghostty with productivity features for developers who use the terminal as a workspace.
+This fork extends the sidebar-enabled Ghostty with productivity features for developers who use the terminal as a workspace — especially those running [Claude Code](https://claude.ai/claude-code) sessions across multiple tabs.
+
+### Real-Time Progress Log
+
+Each tab displays a live progress log overlay on the first pane, updated via a file-based API. Claude Code (or any script) can push timestamped status entries that appear instantly in the UI.
+
+- **File-backed** — log files at `/tmp/ghostty-progress/{session}.log`, one per tab
+- **Real-time** — Swift uses `DispatchSource` (kqueue) to detect file changes, zero polling
+- **8 lines visible** — latest entries shown, newest first; full history in file
+- **Click to edit** — click the progress area to manually edit entries
+- **Per-tab isolation** — each tab has its own log keyed by session name (e.g. `GHOSTTYDEV-3A7F2B1C`)
+
+#### CLI
+
+```bash
+# Append a progress entry (auto-timestamped)
+python3 tools/scripts/ghostty_progress.py append GHOSTTYDEV-xxx "🔄 Building auth module"
+
+# List entries
+python3 tools/scripts/ghostty_progress.py list GHOSTTYDEV-xxx
+
+# Clear log
+python3 tools/scripts/ghostty_progress.py clear GHOSTTYDEV-xxx
+
+# List all active sessions
+python3 tools/scripts/ghostty_progress.py sessions
+```
+
+#### Claude Code Skill
+
+A bundled skill (`tools/skills/progress-update/`) tells Claude Code to automatically log progress when tasks start or complete. See [Loading Skills](#loading-skills) below.
+
+### Sidebar Action Popover
+
+Quick actions accessible via the `>` chevron on the selected tab card:
+
+- **Resume tmux** — attach to the tab's tmux session (creates if needed)
+- **Launch CC** — start Claude Code inside the tmux session
+- **Detach tmux** — detach without killing the session
+- **Auto-dismiss** — popover closes after button click
+
+### Tmux Session Management
+
+Each tab automatically gets a named tmux session with a `GHOSTTYDEV-` prefix for easy identification:
+
+- **Named sessions** — e.g. `GHOSTTYDEV-3A7F2B1C` (derived from pane UUID)
+- **Idempotent** — `tmux new-session -A` creates or attaches
+- **`tmux ls` friendly** — all Ghostty sessions are instantly recognizable
+
+### Stable Sidebar Tab Info
+
+Sidebar tab cards always display metadata from the **leftmost pane**, regardless of which pane has focus. No more info jumping around when switching between splits.
 
 ### Per-Tab Notes Panel
 
@@ -13,15 +64,14 @@ Toggle a side panel per tab to jot down notes, commands, or context — persiste
 - **Toggle:** `Cmd+Shift+N` or View menu → Toggle Notes
 - **Per-tab isolation** — each tab has its own notes
 - **Persistent** — notes saved to `~/.config/ghosttydev/notes/` as individual files
-- **macOS 13+ compatible**
 
 ### Task Title Bar
 
-A thin bar at the top of each tab displaying the current task context (e.g. Linear issue, project name).
+A thin bar at the top of the first pane displaying the current task context (e.g. Linear issue, project name).
 
 - **Toggle:** `Cmd+Shift+M` or View menu (hidden by default)
-- **Color strip** — visual indicator derived from task metadata
-- **Notes width constrained** to the first pane
+- **Color strip** — visual indicator matching the tab color
+- **Overlay** — only covers the first pane, second pane gets full height
 
 ### Independent Session Persistence
 
@@ -30,8 +80,7 @@ Replaced macOS `NSWindowRestoration` with a custom JSON-based session persistenc
 - **Restart-idempotent** — multiple restarts produce the exact same window/tab state
 - **Saves on every state change** — tab reorder, title change, panel toggle
 - **Tab order preserved** — tabs restore in the correct sequence
-- **Backward-compatible decoder** — new fields have safe defaults, old sessions load without issues
-- **Isolated storage** — session data at `~/.config/ghosttydev/session.json`, no conflict with upstream Ghostty
+- **Isolated storage** — session data at `~/.config/ghosttydev/session.json`
 
 ### Ghostty Dev Variant
 
@@ -40,6 +89,35 @@ Runs as a separate app alongside the official Ghostty:
 - **Distinct bundle ID and display name** (`Ghostty Dev`)
 - **Separate config directory** (`~/.config/ghosttydev/`)
 - **Swift 6.2 / Xcode 16.3 compatible**
+
+## Loading Skills
+
+Ghostty Dev ships with a Claude Code skill for automatic progress reporting. To use it:
+
+### 1. Symlink the skill
+
+```bash
+ln -s /path/to/ghostty_workspace/tools/skills/progress-update ~/.claude/skills/progress-update
+```
+
+### 2. Install the CLI script
+
+```bash
+cp tools/scripts/ghostty_progress.py ~/.claude/scripts/ghostty_progress.py
+chmod +x ~/.claude/scripts/ghostty_progress.py
+```
+
+### 3. How it works
+
+When Claude Code runs inside a Ghostty Dev tab (via the sidebar's "Launch CC" button), the environment variable `$AGENT_BROWSER_TABNAME` is automatically set to the tmux session name. The skill instructs Claude Code to call the progress CLI whenever tasks change status:
+
+```
+17:25 | 🔄 Building Todo MVC app
+17:26 | ✅ Todo MVC app created
+17:30 | 🔄 Adding authentication
+```
+
+These entries appear in real time in the progress log overlay at the top of the first pane.
 
 ## Upstream Sidebar Features
 
