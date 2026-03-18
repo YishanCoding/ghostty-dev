@@ -161,9 +161,9 @@ chmod +x ~/.claude/scripts/ghostty_progress.py
 When Claude Code runs inside a Ghostty Dev tab (via the sidebar's "Launch CC" button), the environment variable `$AGENT_BROWSER_TABNAME` is automatically set to the tmux session name. The skill instructs Claude Code to call the progress CLI whenever tasks change status:
 
 ```
-17:25 | 🔄 Building Todo MVC app
-17:26 | ✅ Todo MVC app created
 17:30 | 🔄 Adding authentication
+17:26 | ✅ Todo MVC app created
+17:25 | 🔄 Building Todo MVC app
 ```
 
 These entries appear in real time in the progress log overlay at the top of the first pane.
