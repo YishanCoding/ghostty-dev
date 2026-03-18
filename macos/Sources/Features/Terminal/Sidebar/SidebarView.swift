@@ -68,6 +68,7 @@ struct SidebarView: View {
     @AppStorage("SidebarFontSize") private var sidebarFontSize: Double = 12
     @State private var draggingTabID: ObjectIdentifier?
     @State private var dropTargetTabID: ObjectIdentifier?
+    @State private var showActionPopover: Bool = false
 
     var body: some View {
         ScrollView {
@@ -76,19 +77,27 @@ struct SidebarView: View {
                     SidebarTabCard(tab: tab, theme: theme, fields: fields, showCardBorder: showCardBorder)
                             .contentShape(Rectangle())
                             .opacity(draggingTabID == tab.id ? 0.4 : 1.0)
-                            .background(
-                                GeometryReader { geo -> Color in
-                                    if tab.isSelected {
-                                        let y = geo.frame(in: .named("sidebar")).origin.y
-                                        if abs(y - tabManager.selectedTabYOffset) > 1 {
-                                            DispatchQueue.main.async {
-                                                tabManager.selectedTabYOffset = y
-                                            }
-                                        }
+                            .overlay(alignment: .trailing) {
+                                if tab.isSelected {
+                                    Button {
+                                        showActionPopover.toggle()
+                                    } label: {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundColor(theme.secondaryText)
+                                            .frame(width: 16, height: 24)
+                                            .contentShape(Rectangle())
                                     }
-                                    return Color.clear
+                                    .buttonStyle(.plain)
+                                    .popover(isPresented: $showActionPopover, arrowEdge: .trailing) {
+                                        SidebarActionPopover(
+                                            tabManager: tabManager,
+                                            theme: theme,
+                                            isPresented: $showActionPopover
+                                        )
+                                    }
                                 }
-                            )
+                            }
                             .overlay(alignment: .top) {
                                 if dropTargetTabID == tab.id && draggingTabID != tab.id {
                                     Rectangle()
@@ -173,7 +182,6 @@ struct SidebarView: View {
                 .padding(.horizontal, 8)
             .padding(.top, 8)
         }
-        .coordinateSpace(name: "sidebar")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.background)
     }

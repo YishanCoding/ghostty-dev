@@ -42,9 +42,6 @@ class SidebarTabManager: ObservableObject {
     /// The detected state of the selected tab's first pane.
     @Published var selectedPaneState: PaneState = .unknown
 
-    /// Y offset of the selected tab in the sidebar, for action panel alignment.
-    @Published var selectedTabYOffset: CGFloat = 0
-
     /// Guard flag to prevent double-invocation of Launch CC within a single poll cycle.
     @Published private(set) var isLaunchingCC: Bool = false
 
@@ -188,7 +185,7 @@ class SidebarTabManager: ObservableObject {
 
         let newTabs = tabWindows.map { w -> TabItem in
             let controller = w.windowController as? BaseTerminalController
-            let surface = controller?.focusedSurface
+            let surface = controller?.surfaceTree.root?.leftmostLeaf()
             let wid = ObjectIdentifier(w)
             let sid = surface?.id
             let pwd = surface?.pwd
@@ -220,14 +217,17 @@ class SidebarTabManager: ObservableObject {
 
     // MARK: - Pane State Detection
 
-    /// The UUID prefix (first 8 chars) of the selected tab's first pane surface.
+    /// Prefix added to tmux session names for easy identification in `tmux ls`.
+    private static let sessionPrefix = "GHOSTTYDEV-"
+
+    /// The session name for the selected tab's first pane (e.g. "GHOSTTYDEV-3A7F2B1C").
     var selectedTabUUIDPrefix: String? {
         guard let window else { return nil }
         let selectedWindow = window.tabGroup?.selectedWindow ?? window
         guard let controller = selectedWindow.windowController as? BaseTerminalController,
               let root = controller.surfaceTree.root else { return nil }
         let firstPane = root.leftmostLeaf()
-        return String(firstPane.id.uuidString.prefix(8))
+        return Self.sessionPrefix + String(firstPane.id.uuidString.prefix(8))
     }
 
     /// Cached result of async CC detection, updated in background.
@@ -244,12 +244,12 @@ class SidebarTabManager: ObservableObject {
 
         let firstPane = root.leftmostLeaf()
         let title = firstPane.title
-        let uuidPrefix = String(firstPane.id.uuidString.prefix(8))
+        let sessionName = Self.sessionPrefix + String(firstPane.id.uuidString.prefix(8))
 
         let lower = title.lowercased()
 
         // Detect if pane is INSIDE tmux based on title
-        let inTmux = title.contains(uuidPrefix) || lower.contains("tmux")
+        let inTmux = title.contains(sessionName) || lower.contains("tmux")
 
         let newState: PaneState
         if inTmux {
@@ -259,7 +259,7 @@ class SidebarTabManager: ObservableObject {
                 newState = .tmuxRunning
             }
             // Kick off async CC check (non-blocking)
-            checkCCAsync(sessionName: uuidPrefix)
+            checkCCAsync(sessionName: sessionName)
         } else {
             cachedCCRunning = false
             newState = .idle

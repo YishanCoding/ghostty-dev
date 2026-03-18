@@ -65,11 +65,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The sidebar hosting view, kept for theme updates on config change.
     private var sidebarHostingView: NSHostingView<SidebarView>?
 
-    /// The action panel hosting view, shown as an independent collapsible column.
-    private var actionPanelHostingView: NSHostingView<SidebarActionPanel>?
-
-    /// Observer for action panel expand/collapse to adjust split view width.
-    private var panelExpandedObserver: NSObjectProtocol?
+    // Action panel is rendered as a SwiftUI popover inside SidebarView.
 
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
@@ -155,9 +151,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Remove all of our notificationcenter subscriptions
         let center = NotificationCenter.default
         center.removeObserver(self)
-        if let panelExpandedObserver {
-            center.removeObserver(panelExpandedObserver)
-        }
+        // Action panel observer removed — now uses SwiftUI popover.
     }
 
     // MARK: Base Controller Overrides
@@ -581,10 +575,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             theme: newTheme,
             fields: config.sidebarFields
         )
-        actionPanelHostingView?.rootView = SidebarActionPanel(
-            tabManager: sidebarTabManager,
-            theme: newTheme
-        )
+        // Action panel theme updates via SidebarView popover.
     }
 
     /// Refreshes the sidebar tab manager for all windows in the current tab group.
@@ -1116,46 +1107,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         ))
         self.sidebarHostingView = sidebarHostingView
 
-        // Create the action panel as an independent collapsible column
-        let actionPanelHostingView = NSHostingView(rootView: SidebarActionPanel(
-            tabManager: tabManager,
-            theme: ghostty.config.sidebarTheme
-        ))
-        self.actionPanelHostingView = actionPanelHostingView
-
-        // Combine sidebar + action panel in a container with Auto Layout
-        let sidebarContainer = NSView()
-        sidebarContainer.addSubview(sidebarHostingView)
-        sidebarContainer.addSubview(actionPanelHostingView)
-
-        sidebarHostingView.translatesAutoresizingMaskIntoConstraints = false
-        actionPanelHostingView.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            // Sidebar fills left side, top to bottom
-            sidebarHostingView.topAnchor.constraint(equalTo: sidebarContainer.topAnchor),
-            sidebarHostingView.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor),
-            sidebarHostingView.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor),
-
-            // Action panel on the right, top to bottom
-            actionPanelHostingView.topAnchor.constraint(equalTo: sidebarContainer.topAnchor),
-            actionPanelHostingView.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor),
-            actionPanelHostingView.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor),
-
-            // Sidebar right edge meets action panel left edge
-            sidebarHostingView.trailingAnchor.constraint(equalTo: actionPanelHostingView.leadingAnchor),
-        ])
-
-        // Sidebar stretches; action panel keeps its intrinsic width
-        sidebarHostingView.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        actionPanelHostingView.setContentHuggingPriority(.required, for: .horizontal)
-        actionPanelHostingView.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        // Build the split view: sidebarContainer | terminal
+        // Build the split view: sidebar | terminal
         let splitView = NSSplitView()
         splitView.isVertical = true
         splitView.dividerStyle = .thin
-        splitView.addSubview(sidebarContainer)
+        splitView.addSubview(sidebarHostingView)
         splitView.addSubview(terminalContainer)
         splitView.setHoldingPriority(.defaultLow, forSubviewAt: 0)
         splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 1)
@@ -1163,22 +1119,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // Set initial sidebar width (synced across tabs via UserDefaults)
         let savedWidth = UserDefaults.standard.double(forKey: "SidebarWidth")
-        let sidebarWidth = savedWidth > 0 ? min(max(savedWidth, 140), 420) : 200
-        sidebarContainer.frame = NSRect(x: 0, y: 0, width: sidebarWidth, height: 400)
+        let sidebarWidth = savedWidth > 0 ? min(max(savedWidth, 140), 280) : 200
+        sidebarHostingView.frame = NSRect(x: 0, y: 0, width: sidebarWidth, height: 400)
         terminalContainer.frame = NSRect(x: sidebarWidth, y: 0, width: 600, height: 400)
 
         window.contentView = splitView
 
-        // Observe action panel expand/collapse to adjust sidebar width as a drawer.
-        // When panel expands, sidebar grows; when it collapses, sidebar shrinks.
-        // Tab list width stays constant.
-        panelExpandedObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.syncActionPanelDrawer()
-        }
+        // Action panel is now a SwiftUI popover inside SidebarView — no AppKit observer needed.
 
         // If we have a default size, we want to apply it.
         if let defaultSize {
@@ -1257,27 +1204,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
-    // MARK: - Action Panel Drawer
-
-    /// Tracks the last known expanded state to detect changes and compute delta.
-    private var lastPanelExpanded: Bool = UserDefaults.standard.bool(forKey: "SidebarActionPanelExpanded")
-
-    /// Adjusts the NSSplitView divider position when the action panel expands/collapses,
-    /// so the tab list width stays constant (drawer effect).
-    private func syncActionPanelDrawer() {
-        let expanded = UserDefaults.standard.bool(forKey: "SidebarActionPanelExpanded")
-        guard expanded != lastPanelExpanded else { return }
-        lastPanelExpanded = expanded
-
-        guard let splitView = window?.contentView as? NSSplitView,
-              let sidebar = splitView.subviews.first else { return }
-
-        // Panel is 120px expanded, 32px collapsed → delta = 88px
-        let delta: CGFloat = expanded ? 88 : -88
-        let newWidth = sidebar.frame.width + delta
-
-        splitView.setPosition(newWidth, ofDividerAt: 0)
-    }
+    // Action panel is a SwiftUI popover — no NSSplitView adjustment needed.
 
     // MARK: NSWindowDelegate
 
@@ -1539,16 +1466,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
-    @IBAction func toggleActionPanel(_ sender: Any?) {
-        guard let actionPanelHostingView else { return }
-        let isHidden = actionPanelHostingView.isHidden
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.allowsImplicitAnimation = true
-            actionPanelHostingView.isHidden = !isHidden
-            actionPanelHostingView.superview?.layoutSubtreeIfNeeded()
-        }
-    }
+    // toggleActionPanel: handled by SwiftUI popover in SidebarView.
+    // Menu shortcut Cmd+Shift+A is kept in MainMenu.xib for discoverability.
 
     // MARK: - TerminalViewDelegate
 
