@@ -12,8 +12,12 @@ enum PaneState: Equatable {
 /// Floats above the terminal pane without affecting layout.
 struct SidebarActionPopover: View {
     @ObservedObject var tabManager: SidebarTabManager
+    @ObservedObject var snippetStore: SnippetStore
     let theme: SidebarTheme
     @Binding var isPresented: Bool
+
+    @State private var showSnippetEditor = false
+    @State private var editingSnippet: Snippet?
 
     private var paneState: PaneState { tabManager.selectedPaneState }
 
@@ -25,6 +29,7 @@ struct SidebarActionPopover: View {
 
     var body: some View {
         VStack(spacing: 6) {
+            // Built-in actions
             actionButton(
                 "Resume tmux",
                 icon: "terminal",
@@ -43,8 +48,59 @@ struct SidebarActionPopover: View {
                 enabled: paneState == .tmuxRunning || paneState == .ccRunning,
                 action: { tabManager.detachTmux(); isPresented = false }
             )
+
+            // Snippets section
+            if !snippetStore.snippets.isEmpty {
+                Divider()
+                    .padding(.vertical, 2)
+
+                ForEach(snippetStore.snippets) { snippet in
+                    snippetButton(snippet)
+                }
+            }
         }
         .padding(8)
+        .sheet(isPresented: $showSnippetEditor) {
+            SnippetEditorSheet(
+                store: snippetStore,
+                isPresented: $showSnippetEditor,
+                editing: editingSnippet
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func snippetButton(_ snippet: Snippet) -> some View {
+        Button {
+            // Trim trailing newlines so the cursor stays at the end of the command.
+            let cmd = snippet.command.trimmingCharacters(in: .newlines)
+            tabManager.sendTextToSelectedPane(cmd)
+            isPresented = false
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "text.insert")
+                    .font(.system(size: fontSize))
+                Text(snippet.name)
+                    .font(.system(size: fontSize, weight: .medium))
+                    .lineLimit(1)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(theme.activeTabBackground)
+            .foregroundColor(theme.foreground)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Edit...") {
+                editingSnippet = snippet
+                showSnippetEditor = true
+            }
+            Button("Delete", role: .destructive) {
+                snippetStore.delete(snippet)
+            }
+        }
     }
 
     @ViewBuilder

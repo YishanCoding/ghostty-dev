@@ -69,12 +69,21 @@ struct SidebarView: View {
     @State private var draggingTabID: ObjectIdentifier?
     @State private var dropTargetTabID: ObjectIdentifier?
     @State private var showActionPopover: Bool = false
+    @State private var showAddSnippet: Bool = false
+    @ObservedObject private var snippetStore = SnippetStore.shared
+    @AppStorage("SidebarShowProgressBadge") private var showProgressBadge: Bool = false
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(tabManager.tabs.enumerated()), id: \.element.id) { index, tab in
-                    SidebarTabCard(tab: tab, theme: theme, fields: fields, showCardBorder: showCardBorder)
+                    SidebarTabCard(
+                        tab: tab,
+                        theme: theme,
+                        fields: fields,
+                        showCardBorder: showCardBorder,
+                        showProgressBadge: showProgressBadge
+                    )
                             .contentShape(Rectangle())
                             .opacity(draggingTabID == tab.id ? 0.4 : 1.0)
                             .overlay(alignment: .trailing) {
@@ -92,6 +101,7 @@ struct SidebarView: View {
                                     .popover(isPresented: $showActionPopover, arrowEdge: .trailing) {
                                         SidebarActionPopover(
                                             tabManager: tabManager,
+                                            snippetStore: snippetStore,
                                             theme: theme,
                                             isPresented: $showActionPopover
                                         )
@@ -176,11 +186,29 @@ struct SidebarView: View {
                                     guard let idx = tabManager.tabs.firstIndex(where: { $0.id == tab.id }) else { return true }
                                     return idx >= tabManager.tabs.count - 1
                                 }())
+
+                                Divider()
+
+                                Button("Add Snippet...") {
+                                    showAddSnippet = true
+                                }
                             }
                     }
                 }
                 .padding(.horizontal, 8)
             .padding(.top, 8)
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Add Snippet...") {
+                showAddSnippet = true
+            }
+        }
+        .sheet(isPresented: $showAddSnippet) {
+            SnippetEditorSheet(
+                store: snippetStore,
+                isPresented: $showAddSnippet
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.background)
@@ -233,6 +261,7 @@ private struct SidebarTabCard: View {
     let theme: SidebarTheme
     let fields: Set<SidebarField>
     var showCardBorder: Bool = true
+    var showProgressBadge: Bool = false
 
     /// Read font size directly from UserDefaults to avoid @AppStorage first-frame flash.
     private var fontSize: CGFloat {
@@ -335,6 +364,30 @@ private struct SidebarTabCard: View {
                         }
                     }
                 }
+
+                // Latest progress log entry — distinct pill style
+                if showProgressBadge, let progress = tab.progressLatest {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: max(iconFontSize - 1, 6)))
+                            .foregroundColor(.orange)
+                        Text(progress)
+                            .font(.system(size: max(secondaryFontSize - 2, 7), design: .monospaced))
+                            .foregroundColor(theme.foreground.opacity(0.8))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.orange.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Color.orange.opacity(0.2), lineWidth: 0.5)
+                    )
+                }
             }
             .padding(.vertical, 8)
             .padding(.leading, 8)
@@ -353,5 +406,44 @@ private struct SidebarTabCard: View {
                 }
             }
         )
+        .overlay(alignment: .topTrailing) {
+            if tab.isSelected {
+                // Corner flag — a small triangle bookmark in the top-right
+                SelectedTabFlag(color: flagColor)
+                    .frame(width: 14, height: 14)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: Self.cardRadius
+                        )
+                    )
+            }
+        }
+    }
+
+    /// Flag color: use the tab color if set, otherwise a subtle accent tint.
+    private var flagColor: Color {
+        if let nsColor = tab.tabColor.displayColor {
+            return Color(nsColor: nsColor)
+        }
+        return Color.accentColor.opacity(0.7)
+    }
+}
+
+/// A small triangle drawn in the top-right corner of the selected tab card.
+private struct SelectedTabFlag: View {
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: size.width, y: 0))
+            path.addLine(to: CGPoint(x: size.width, y: size.height))
+            path.closeSubpath()
+            context.fill(path, with: .color(color))
+        }
     }
 }

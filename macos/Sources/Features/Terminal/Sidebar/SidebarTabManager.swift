@@ -14,6 +14,7 @@ class SidebarTabManager: ObservableObject {
         let isSelected: Bool
         let needsAttention: Bool
         let tabColor: TerminalTabColor
+        let progressLatest: String?
         let window: NSWindow
 
         /// The last path component of the pwd, for compact display.
@@ -34,6 +35,7 @@ class SidebarTabManager: ObservableObject {
                 && lhs.statusEntries == rhs.statusEntries
                 && lhs.needsAttention == rhs.needsAttention
                 && lhs.tabColor == rhs.tabColor
+                && lhs.progressLatest == rhs.progressLatest
         }
     }
 
@@ -168,6 +170,17 @@ class SidebarTabManager: ObservableObject {
         return nil
     }
 
+    // MARK: - Progress Log
+
+    /// Read the last non-empty line from a progress log file.
+    private static func latestProgressLine(session: String) -> String? {
+        let path = "/tmp/ghostty-progress/\(session).log"
+        guard let data = FileManager.default.contents(atPath: path),
+              let content = String(data: data, encoding: .utf8) else { return nil }
+        let lines = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        return lines.last
+    }
+
     // MARK: - Refresh
 
     func refresh() {
@@ -192,6 +205,11 @@ class SidebarTabManager: ObservableObject {
             let entries = sid.map { metadataStore.statusEntries(for: $0) } ?? []
             let branch = pwd.flatMap { gitBranch(at: $0) }
             let color = (w as? TerminalWindow)?.tabColor ?? .none
+            let progress = controller.flatMap { c -> String? in
+                guard let root = c.surfaceTree.root else { return nil }
+                let uuidPrefix = String(root.leftmostLeaf().id.uuidString.prefix(8))
+                return Self.latestProgressLine(session: Self.sessionPrefix + uuidPrefix)
+            }
 
             return TabItem(
                 id: wid,
@@ -203,6 +221,7 @@ class SidebarTabManager: ObservableObject {
                 isSelected: w === selectedWindow,
                 needsAttention: attentionWindows.contains(wid) && w !== selectedWindow,
                 tabColor: color,
+                progressLatest: progress,
                 window: w
             )
         }
@@ -230,6 +249,11 @@ class SidebarTabManager: ObservableObject {
         return Self.sessionPrefix + String(firstPane.id.uuidString.prefix(8))
     }
 
+    /// Cached result of async tmux-attached detection, updated in background.
+    private var cachedTmuxAttached: Bool = false
+    /// Whether an async tmux check is already in flight.
+    private var tmuxCheckInFlight: Bool = false
+
     /// Cached result of async CC detection, updated in background.
     private var cachedCCRunning: Bool = false
     /// Whether an async CC check is already in flight.
@@ -248,8 +272,11 @@ class SidebarTabManager: ObservableObject {
 
         let lower = title.lowercased()
 
-        // Detect if pane is INSIDE tmux based on title
-        let inTmux = title.contains(sessionName) || lower.contains("tmux")
+        // Detect if pane is INSIDE tmux: title-based (instant) OR async process check (fallback).
+        // tmux defaults to `set-titles off`, so the terminal title often won't change —
+        // cachedTmuxAttached provides reliable detection via `tmux list-clients`.
+        let titleMatch = title.contains(sessionName) || lower.contains("tmux")
+        let inTmux = titleMatch || cachedTmuxAttached
 
         let newState: PaneState
         if inTmux {
@@ -265,10 +292,46 @@ class SidebarTabManager: ObservableObject {
             newState = .idle
         }
 
+        // Always kick off async tmux check to keep cache fresh (detach → idle).
+        checkTmuxAsync(sessionName: sessionName)
+
         if newState != selectedPaneState {
             selectedPaneState = newState
             isLaunchingCC = false
         }
+    }
+
+    /// Async check if the tmux session is attached — never blocks the main thread.
+    private func checkTmuxAsync(sessionName: String) {
+        guard !tmuxCheckInFlight else { return }
+        tmuxCheckInFlight = true
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let attached = Self.isTmuxSessionAttached(sessionName)
+            DispatchQueue.main.async {
+                self?.tmuxCheckInFlight = false
+                guard self?.cachedTmuxAttached != attached else { return }
+                self?.cachedTmuxAttached = attached
+                self?.refresh()
+            }
+        }
+    }
+
+    /// Check if the named tmux session has an attached client.
+    /// Returns false if the session doesn't exist or has no clients.
+    private static func isTmuxSessionAttached(_ sessionName: String) -> Bool {
+        let pipe = Pipe()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-l", "-c", "tmux list-clients -t \(sessionName) -F '#{client_name}' 2>/dev/null | head -1"]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !result.isEmpty
     }
 
     /// Async check if CC is running — never blocks the main thread.
@@ -282,7 +345,6 @@ class SidebarTabManager: ObservableObject {
                 self?.ccCheckInFlight = false
                 guard self?.cachedCCRunning != running else { return }
                 self?.cachedCCRunning = running
-                // Trigger state re-evaluation on next refresh
                 self?.refresh()
             }
         }
@@ -321,7 +383,7 @@ class SidebarTabManager: ObservableObject {
               let surfaceModel = selectedFirstPaneSurfaceModel() else { return }
         // -A flag: attach if session exists, create if not (idempotent).
         // Runs in user's shell so PATH always includes tmux.
-        surfaceModel.sendText("tmux new-session -A -s \(uuidPrefix)\n")
+        surfaceModel.sendText("tmux new-session -A -s \(uuidPrefix)")
     }
 
     func launchCC() {
@@ -329,7 +391,7 @@ class SidebarTabManager: ObservableObject {
               let uuidPrefix = selectedTabUUIDPrefix,
               let surfaceModel = selectedFirstPaneSurfaceModel() else { return }
         isLaunchingCC = true
-        surfaceModel.sendText("export AGENT_BROWSER_TABNAME=\(uuidPrefix) && claude --dangerously-skip-permissions\n")
+        surfaceModel.sendText("export AGENT_BROWSER_TABNAME=\(uuidPrefix) && claude --dangerously-skip-permissions")
     }
 
     func detachTmux() {
@@ -343,6 +405,12 @@ class SidebarTabManager: ObservableObject {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try? process.run()
+    }
+
+    /// Send text to the first pane of the selected tab (no newline appended).
+    func sendTextToSelectedPane(_ text: String) {
+        guard let surfaceModel = selectedFirstPaneSurfaceModel() else { return }
+        surfaceModel.sendText(text)
     }
 
     /// Get the Ghostty.Surface model for the first pane of the selected tab.
