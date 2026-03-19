@@ -12,11 +12,11 @@ When working inside a Ghostty Dev terminal session, report task status changes t
 
 ## How to Report Progress
 
-Use the `ghostty_progress.py` CLI to append entries. The session name comes from the `$AGENT_BROWSER_TABNAME` environment variable.
-
 ```bash
-python3 ~/.claude/scripts/ghostty_progress.py append "$AGENT_BROWSER_TABNAME" "<emoji> <message>"
+python3 ~/.claude/scripts/ghostty_progress.py append "<emoji> <message>"
 ```
+
+Session name is derived automatically from `$GHOSTTY_TAB_ID` — no manual configuration needed.
 
 ## When to Report
 
@@ -29,12 +29,12 @@ Each entry is automatically timestamped by the CLI. Just provide the emoji and a
 
 ```bash
 # Starting work
-python3 ~/.claude/scripts/ghostty_progress.py append "$AGENT_BROWSER_TABNAME" "🔄 Implementing user authentication"
+python3 ~/.claude/scripts/ghostty_progress.py append "🔄 Implementing user authentication"
 
 # Completed work
-python3 ~/.claude/scripts/ghostty_progress.py append "$AGENT_BROWSER_TABNAME" "✅ User authentication complete"
+python3 ~/.claude/scripts/ghostty_progress.py append "✅ User authentication complete"
 ```
 
 ## Guard
 
-Only call the script when `$AGENT_BROWSER_TABNAME` is set (i.e., running inside a Ghostty Dev CC session). Skip silently if the variable is empty.
+Only call the script when `$GHOSTTY_TAB_ID` is set (i.e., running inside a Ghostty Dev terminal). Skip silently if the variable is empty.

@@ -99,6 +99,7 @@ Runs as a separate app alongside the official Ghostty:
 
 - macOS 13+
 - Xcode 16.3+ (Swift 6.2)
+- Zig 0.15+ (for building the Zig core / libghostty)
 - tmux (for session management)
 - Python 3 (for progress log CLI)
 
@@ -108,7 +109,10 @@ Runs as a separate app alongside the official Ghostty:
 git clone https://github.com/user/ghostty-dev.git
 cd ghostty-dev
 
-# Build release
+# Build Zig core (libghostty) → outputs macos/GhosttyKit.xcframework
+zig build -Demit-xcframework=true -Doptimize=ReleaseFast
+
+# Build Swift app (links against the xcframework above)
 xcodebuild -project "macos/Ghostty Dev.xcodeproj" \
     -scheme "Ghostty Dev" \
     -configuration Release \
@@ -120,6 +124,8 @@ cp -R "/tmp/ghostty-build/Build/Products/Release/Ghostty Dev.app" \
     "/Applications/Ghostty Dev.app"
 codesign --force --deep --sign - "/Applications/Ghostty Dev.app"
 ```
+
+> **Why `zig build` first?** The app has two compilation stages: Zig core (`libghostty.a`) and Swift frontend. `xcodebuild` only compiles Swift and links against the existing xcframework — it does not rebuild the Zig core. Skipping `zig build` means new Zig-side features won't take effect.
 
 > **Why remove before copy?** The app is ad-hoc signed (no Apple Developer certificate). macOS caches code signature validation per bundle path. If you overwrite an existing `.app` with `cp -R` without removing first, macOS may see a Team ID mismatch between the cached signature of the old binary and the newly copied Sparkle.framework, causing a **DYLD crash at launch** (`Library not loaded: Sparkle.framework ... different Team IDs`). Removing the old `.app` first clears the cached validation.
 >

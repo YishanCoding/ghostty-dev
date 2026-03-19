@@ -388,10 +388,9 @@ class SidebarTabManager: ObservableObject {
 
     func launchCC() {
         guard !isLaunchingCC,
-              let uuidPrefix = selectedTabUUIDPrefix,
               let surfaceModel = selectedFirstPaneSurfaceModel() else { return }
         isLaunchingCC = true
-        surfaceModel.sendText("export AGENT_BROWSER_TABNAME=\(uuidPrefix) && claude --dangerously-skip-permissions")
+        surfaceModel.sendText("claude --dangerously-skip-permissions")
     }
 
     func detachTmux() {

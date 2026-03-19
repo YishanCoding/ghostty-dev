@@ -2,16 +2,28 @@
 """Ghostty progress log CLI.
 
 Usage:
-    ghostty_progress.py append <session> <message>
-    ghostty_progress.py clear <session>
-    ghostty_progress.py list <session>
+    ghostty_progress.py append <message>
+    ghostty_progress.py clear
+    ghostty_progress.py list
     ghostty_progress.py sessions
+
+Session name is derived automatically from $GHOSTTY_TAB_ID.
 """
 import sys, os, re, time
 from pathlib import Path
 
 DIR = Path("/tmp/ghostty-progress")
 SESSION_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+
+
+def get_session() -> str:
+    """Derive session name from GHOSTTY_TAB_ID (first 8 chars, prefixed)."""
+    tab_id = os.environ.get("GHOSTTY_TAB_ID", "")
+    if not tab_id:
+        print("Error: GHOSTTY_TAB_ID not set (not running inside Ghostty Dev?)", file=sys.stderr)
+        sys.exit(1)
+    prefix = tab_id[:8]
+    return f"GHOSTTYDEV-{prefix}"
 
 
 def validate_session(session: str) -> str:
@@ -61,12 +73,15 @@ if __name__ == "__main__":
         print(__doc__)
         sys.exit(0)
     cmd = args[0]
-    if cmd == "append" and len(args) >= 3:
-        append(validate_session(args[1]), " ".join(args[2:]))
-    elif cmd == "clear" and len(args) >= 2:
-        clear(validate_session(args[1]))
-    elif cmd == "list" and len(args) >= 2:
-        list_entries(validate_session(args[1]))
+    if cmd == "append" and len(args) >= 2:
+        session = validate_session(get_session())
+        append(session, " ".join(args[1:]))
+    elif cmd == "clear":
+        session = validate_session(get_session())
+        clear(session)
+    elif cmd == "list":
+        session = validate_session(get_session())
+        list_entries(session)
     elif cmd == "sessions":
         sessions()
     else:
