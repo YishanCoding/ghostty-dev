@@ -16,25 +16,7 @@ Each tab displays a live progress log overlay on the first pane, updated via a f
 - **Click to edit** — click the progress area to manually edit entries
 - **Per-tab isolation** — each tab has its own log keyed by session name (e.g. `GHOSTTYDEV-3A7F2B1C`)
 
-#### CLI
-
-```bash
-# Append a progress entry (auto-timestamped)
-python3 tools/scripts/ghostty_progress.py append GHOSTTYDEV-xxx "🔄 Building auth module"
-
-# List entries
-python3 tools/scripts/ghostty_progress.py list GHOSTTYDEV-xxx
-
-# Clear log
-python3 tools/scripts/ghostty_progress.py clear GHOSTTYDEV-xxx
-
-# List all active sessions
-python3 tools/scripts/ghostty_progress.py sessions
-```
-
-#### Claude Code Skill
-
-A bundled skill (`tools/skills/progress-update/`) tells Claude Code to automatically log progress when tasks start or complete. See [Loading Skills](#loading-skills) below.
+Install the bundled CLI and skill (see [Installation](#installation)), and Claude Code will automatically log progress when tasks start or complete.
 
 ### Sidebar Action Popover
 
@@ -111,14 +93,16 @@ xcodebuild -project "macos/Ghostty Dev.xcodeproj" \
     -configuration Release \
     -derivedDataPath /tmp/ghostty-build build
 
-# Sign (ad-hoc, for local use)
-codesign --force --deep --sign - \
-    "/tmp/ghostty-build/Build/Products/Release/Ghostty Dev.app"
-
-# Install
+# Deploy to /Applications (must remove old copy first — see note below)
+rm -rf "/Applications/Ghostty Dev.app"
 cp -R "/tmp/ghostty-build/Build/Products/Release/Ghostty Dev.app" \
     "/Applications/Ghostty Dev.app"
+codesign --force --deep --sign - "/Applications/Ghostty Dev.app"
 ```
+
+> **Why remove before copy?** The app is ad-hoc signed (no Apple Developer certificate). macOS caches code signature validation per bundle path. If you overwrite an existing `.app` with `cp -R` without removing first, macOS may see a Team ID mismatch between the cached signature of the old binary and the newly copied Sparkle.framework, causing a **DYLD crash at launch** (`Library not loaded: Sparkle.framework ... different Team IDs`). Removing the old `.app` first clears the cached validation.
+>
+> **Why `codesign --force --deep --sign -` after copy?** This re-signs the entire bundle (including embedded frameworks like Sparkle) with a consistent ad-hoc identity, ensuring all components share the same signature. Running this on the final installed path avoids any path-dependent signing issues.
 
 Ghostty Dev runs alongside the official Ghostty — separate bundle ID, separate config.
 

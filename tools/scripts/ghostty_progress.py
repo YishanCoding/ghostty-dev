@@ -7,22 +7,34 @@ Usage:
     ghostty_progress.py list <session>
     ghostty_progress.py sessions
 """
-import sys, os, time
+import sys, os, re, time
 from pathlib import Path
 
 DIR = Path("/tmp/ghostty-progress")
+SESSION_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+
+
+def validate_session(session: str) -> str:
+    if not SESSION_RE.match(session):
+        print(f"Error: invalid session name '{session}' (only A-Z, a-z, 0-9, _, - allowed)", file=sys.stderr)
+        sys.exit(1)
+    return session
 
 
 def get_file(session: str) -> Path:
-    DIR.mkdir(parents=True, exist_ok=True)
+    DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     return DIR / f"{session}.log"
 
 
 def append(session: str, message: str):
     ts = time.strftime("%H:%M")
     line = f"{ts} | {message}\n"
-    with open(get_file(session), "a") as f:
-        f.write(line)
+    try:
+        with open(get_file(session), "a") as f:
+            f.write(line)
+    except OSError as e:
+        print(f"Error: could not write to log: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def clear(session: str):
@@ -50,13 +62,13 @@ if __name__ == "__main__":
         sys.exit(0)
     cmd = args[0]
     if cmd == "append" and len(args) >= 3:
-        append(args[1], " ".join(args[2:]))
+        append(validate_session(args[1]), " ".join(args[2:]))
     elif cmd == "clear" and len(args) >= 2:
-        clear(args[1])
+        clear(validate_session(args[1]))
     elif cmd == "list" and len(args) >= 2:
-        list_entries(args[1])
+        list_entries(validate_session(args[1]))
     elif cmd == "sessions":
         sessions()
     else:
-        print(__doc__)
+        print(f"Error: invalid command or missing arguments.\n{__doc__}", file=sys.stderr)
         sys.exit(1)

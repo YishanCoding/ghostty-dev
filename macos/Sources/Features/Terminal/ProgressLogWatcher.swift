@@ -58,7 +58,7 @@ final class ProgressLogWatcher: ObservableObject {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         if !fm.fileExists(atPath: dirPath, isDirectory: &isDir) {
-            try? fm.createDirectory(atPath: dirPath, withIntermediateDirectories: true)
+            try? fm.createDirectory(atPath: dirPath, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
         // Touch the file so we can open a descriptor
         if !fm.fileExists(atPath: filePath) {
