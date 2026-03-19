@@ -1118,8 +1118,45 @@ class AppDelegate: NSObject,
 
     // MARK: - IB Actions
 
+    /// The settings window controller, retained while shown.
+    private var settingsWindowController: NSWindowController?
+
     @IBAction func openConfig(_ sender: Any?) {
-        Ghostty.App.openConfig()
+        // If settings window already exists, bring it to front
+        if let wc = settingsWindowController, let w = wc.window, w.isVisible {
+            w.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let settingsView = SettingsView()
+        let hostingController = NSHostingController(rootView: settingsView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable]
+
+        // Center on the key window (the terminal the user is working in)
+        if let parent = NSApp.keyWindow {
+            let parentFrame = parent.frame
+            let size = window.frame.size
+            let x = parentFrame.midX - size.width / 2
+            let y = parentFrame.midY - size.height / 2
+            window.setFrameOrigin(NSPoint(x: x, y: y))
+        } else {
+            window.center()
+        }
+
+        let wc = NSWindowController(window: window)
+        wc.showWindow(nil)
+        settingsWindowController = wc
+
+        // Clear reference when window closes to release memory
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.settingsWindowController = nil
+        }
     }
 
     @IBAction func reloadConfig(_ sender: Any?) {
