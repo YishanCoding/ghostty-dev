@@ -13,10 +13,19 @@ Each tab displays a live progress log overlay on the first pane, updated via a f
 - **File-backed** — log files at `/tmp/ghostty-progress/{session}.log`, one per tab
 - **Real-time** — Swift uses `DispatchSource` (kqueue) to detect file changes, zero polling
 - **8 lines visible** — latest entries shown, newest first; full history in file
-- **Click to edit** — click the progress area to manually edit entries
+- **Read-only display** — clean, distraction-free status view
 - **Per-tab isolation** — each tab has its own log keyed by session name (e.g. `GHOSTTYDEV-3A7F2B1C`)
 
 Install the bundled CLI and skill (see [Installation](#installation)), and Claude Code will automatically log progress when tasks start or complete.
+
+### Snippets
+
+User-defined commands shared across all tabs. Click a snippet to send the command text to the terminal.
+
+- **Add** — right-click any tab or sidebar empty area → "Add Snippet..."
+- **Edit/Delete** — right-click a snippet in the action popover
+- **Persistent** — stored at `~/.config/ghosttydev/snippets.json`
+- **No auto-execute** — text is inserted without a trailing newline
 
 ### Sidebar Action Popover
 
@@ -25,7 +34,17 @@ Quick actions accessible via the `>` chevron on the selected tab card:
 - **Resume tmux** — attach to the tab's tmux session (creates if needed)
 - **Launch CC** — start Claude Code inside the tmux session
 - **Detach tmux** — detach without killing the session
+- **Snippets** — user-defined commands listed below built-in actions
 - **Auto-dismiss** — popover closes after button click
+
+### Native Settings Window
+
+`Cmd+,` opens a proper macOS settings window (replaces opening the config file).
+
+- **System tab** — edit config.ghostty settings (window-save-state, app icon style/colors/frame)
+- **Ghostty Dev tab** — toggle progress badge, card border, font size
+- **"Open Config File..."** — quick access to manual config editing
+- **Safe sync** — preserves comments and unknown keys in config file
 
 ### Tmux Session Management
 
@@ -122,35 +141,6 @@ mkdir -p ~/.claude/skills
 # Symlink so the skill stays in sync with repo updates
 ln -s "$(pwd)/tools/skills/progress-update" ~/.claude/skills/progress-update
 ```
-
-## Loading Skills
-
-Ghostty Dev ships with a Claude Code skill for automatic progress reporting. To use it:
-
-### 1. Symlink the skill
-
-```bash
-ln -s /path/to/ghostty_workspace/tools/skills/progress-update ~/.claude/skills/progress-update
-```
-
-### 2. Install the CLI script
-
-```bash
-cp tools/scripts/ghostty_progress.py ~/.claude/scripts/ghostty_progress.py
-chmod +x ~/.claude/scripts/ghostty_progress.py
-```
-
-### 3. How it works
-
-When Claude Code runs inside a Ghostty Dev tab (via the sidebar's "Launch CC" button), the environment variable `$AGENT_BROWSER_TABNAME` is automatically set to the tmux session name. The skill instructs Claude Code to call the progress CLI whenever tasks change status:
-
-```
-17:30 | 🔄 Adding authentication
-17:26 | ✅ Todo MVC app created
-17:25 | 🔄 Building Todo MVC app
-```
-
-These entries appear in real time in the progress log overlay at the top of the first pane.
 
 ## Upstream Sidebar Features
 
