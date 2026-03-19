@@ -2,6 +2,8 @@
 
 > **Upstream features (from tomreinert/ghostty):** Sidebar tab system with rich tab cards, drag-and-drop reorder, git branch detection, custom status entries via CLI (`ghosttyctl`), theme-aware colors, and tab color selection.
 
+![Ghostty Dev Showcase](macos/Assets.xcassets/showcase.png)
+
 ## What Ghostty Dev adds
 
 This fork extends the sidebar-enabled Ghostty with productivity features for developers who use the terminal as a workspace — especially those running [Claude Code](https://claude.ai/claude-code) sessions across multiple tabs.
