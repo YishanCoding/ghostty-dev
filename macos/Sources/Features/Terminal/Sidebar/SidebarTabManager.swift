@@ -4,6 +4,13 @@ import Combine
 /// Observes the tab group of a window and publishes tab metadata for the sidebar.
 @MainActor
 class SidebarTabManager: ObservableObject {
+    enum TabRunState: Equatable {
+        case unknown
+        case idle
+        case tmuxAttached
+        case ccRunning
+    }
+
     struct TabItem: Identifiable, Equatable {
         let id: ObjectIdentifier
         let title: String
@@ -11,6 +18,9 @@ class SidebarTabManager: ObservableObject {
         let gitBranch: String?
         let surfaceId: UUID?
         let statusEntries: [TabMetadataStore.StatusEntry]
+        let runState: TabRunState
+        let lastActivityDate: Date?
+        let cacheSecondsRemaining: Int?
         let isSelected: Bool
         let needsAttention: Bool
         let tabColor: TerminalTabColor
@@ -33,6 +43,9 @@ class SidebarTabManager: ObservableObject {
                 && lhs.pwd == rhs.pwd && lhs.gitBranch == rhs.gitBranch
                 && lhs.surfaceId == rhs.surfaceId
                 && lhs.statusEntries == rhs.statusEntries
+                && lhs.runState == rhs.runState
+                && lhs.lastActivityDate == rhs.lastActivityDate
+                && lhs.cacheSecondsRemaining == rhs.cacheSecondsRemaining
                 && lhs.needsAttention == rhs.needsAttention
                 && lhs.tabColor == rhs.tabColor
                 && lhs.progressLatest == rhs.progressLatest
@@ -40,6 +53,7 @@ class SidebarTabManager: ObservableObject {
     }
 
     @Published var tabs: [TabItem] = []
+    @Published var tabRunStates: [ObjectIdentifier: TabRunState] = [:]
 
     /// The detected state of the selected tab's first pane.
     @Published var selectedPaneState: PaneState = .unknown
@@ -53,6 +67,10 @@ class SidebarTabManager: ObservableObject {
     /// Whether bells should trigger the sidebar attention indicator.
     /// Derived from `bell-features` containing `attention`.
     private let bellTriggersAttention: Bool
+
+    private var tabChecksInFlight: Set<ObjectIdentifier> = []
+    private var tabLastActivity: [ObjectIdentifier: Date] = [:]
+    private var tabCCLastActive: [ObjectIdentifier: Date] = [:]
 
     private weak var window: NSWindow?
     private var observers: [NSObjectProtocol] = []
@@ -195,20 +213,39 @@ class SidebarTabManager: ObservableObject {
 
         let selectedWindow = window.tabGroup?.selectedWindow ?? window
         let metadataStore = TabMetadataStore.shared
+        let previousTabs = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
+        let now = Date()
+        var activeIds: Set<ObjectIdentifier> = []
 
         let newTabs = tabWindows.map { w -> TabItem in
             let controller = w.windowController as? BaseTerminalController
             let surface = controller?.surfaceTree.root?.leftmostLeaf()
             let wid = ObjectIdentifier(w)
+            activeIds.insert(wid)
             let sid = surface?.id
             let pwd = surface?.pwd
             let entries = sid.map { metadataStore.statusEntries(for: $0) } ?? []
             let branch = pwd.flatMap { gitBranch(at: $0) }
             let color = (w as? TerminalWindow)?.tabColor ?? .none
+            let runState = tabRunStates[wid] ?? .unknown
             let progress = controller.flatMap { c -> String? in
                 guard let root = c.surfaceTree.root else { return nil }
                 let uuidPrefix = String(root.leftmostLeaf().id.uuidString.prefix(8))
                 return Self.latestProgressLine(session: Self.sessionPrefix + uuidPrefix)
+            }
+
+            if let surface {
+                checkTabRunStateAsync(tabId: wid, sessionName: Self.sessionName(for: surface))
+            } else {
+                tabRunStates[wid] = .unknown
+            }
+
+            if let previous = previousTabs[wid] {
+                if previous.title != w.title || previous.pwd != pwd || previous.runState != runState {
+                    tabLastActivity[wid] = now
+                }
+            } else if tabLastActivity[wid] == nil {
+                tabLastActivity[wid] = now
             }
 
             return TabItem(
@@ -218,6 +255,9 @@ class SidebarTabManager: ObservableObject {
                 gitBranch: branch,
                 surfaceId: sid,
                 statusEntries: entries,
+                runState: runState,
+                lastActivityDate: tabLastActivity[wid],
+                cacheSecondsRemaining: cacheSecondsRemaining(for: wid, now: now),
                 isSelected: w === selectedWindow,
                 needsAttention: attentionWindows.contains(wid) && w !== selectedWindow,
                 tabColor: color,
@@ -225,6 +265,8 @@ class SidebarTabManager: ObservableObject {
                 window: w
             )
         }
+
+        pruneTabState(activeIds: activeIds)
 
         if newTabs != tabs {
             tabs = newTabs
@@ -239,6 +281,10 @@ class SidebarTabManager: ObservableObject {
     /// Prefix added to tmux session names for easy identification in `tmux ls`.
     private static let sessionPrefix = "GHOSTTYDEV-"
 
+    private static func sessionName(for surface: Ghostty.SurfaceView) -> String {
+        sessionPrefix + String(surface.id.uuidString.prefix(8))
+    }
+
     /// The session name for the selected tab's first pane (e.g. "GHOSTTYDEV-3A7F2B1C").
     var selectedTabUUIDPrefix: String? {
         guard let window else { return nil }
@@ -246,18 +292,8 @@ class SidebarTabManager: ObservableObject {
         guard let controller = selectedWindow.windowController as? BaseTerminalController,
               let root = controller.surfaceTree.root else { return nil }
         let firstPane = root.leftmostLeaf()
-        return Self.sessionPrefix + String(firstPane.id.uuidString.prefix(8))
+        return Self.sessionName(for: firstPane)
     }
-
-    /// Cached result of async tmux-attached detection, updated in background.
-    private var cachedTmuxAttached: Bool = false
-    /// Whether an async tmux check is already in flight.
-    private var tmuxCheckInFlight: Bool = false
-
-    /// Cached result of async CC detection, updated in background.
-    private var cachedCCRunning: Bool = false
-    /// Whether an async CC check is already in flight.
-    private var ccCheckInFlight: Bool = false
 
     private func updateSelectedPaneState(selectedWindow: NSWindow) {
         guard let controller = selectedWindow.windowController as? BaseTerminalController,
@@ -267,53 +303,24 @@ class SidebarTabManager: ObservableObject {
         }
 
         let firstPane = root.leftmostLeaf()
-        let title = firstPane.title
-        let sessionName = Self.sessionPrefix + String(firstPane.id.uuidString.prefix(8))
-
-        let lower = title.lowercased()
-
-        // Detect if pane is INSIDE tmux: title-based (instant) OR async process check (fallback).
-        // tmux defaults to `set-titles off`, so the terminal title often won't change —
-        // cachedTmuxAttached provides reliable detection via `tmux list-clients`.
-        let titleMatch = title.contains(sessionName) || lower.contains("tmux")
-        let inTmux = titleMatch || cachedTmuxAttached
+        let tabId = ObjectIdentifier(selectedWindow)
+        checkTabRunStateAsync(tabId: tabId, sessionName: Self.sessionName(for: firstPane))
 
         let newState: PaneState
-        if inTmux {
-            if lower.contains("claude") || cachedCCRunning {
-                newState = .ccRunning
-            } else {
-                newState = .tmuxRunning
-            }
-            // Kick off async CC check (non-blocking)
-            checkCCAsync(sessionName: sessionName)
-        } else {
-            cachedCCRunning = false
+        switch tabRunStates[tabId] ?? .unknown {
+        case .idle:
             newState = .idle
+        case .tmuxAttached:
+            newState = .tmuxRunning
+        case .ccRunning:
+            newState = .ccRunning
+        case .unknown:
+            newState = .unknown
         }
-
-        // Always kick off async tmux check to keep cache fresh (detach → idle).
-        checkTmuxAsync(sessionName: sessionName)
 
         if newState != selectedPaneState {
             selectedPaneState = newState
             isLaunchingCC = false
-        }
-    }
-
-    /// Async check if the tmux session is attached — never blocks the main thread.
-    private func checkTmuxAsync(sessionName: String) {
-        guard !tmuxCheckInFlight else { return }
-        tmuxCheckInFlight = true
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let attached = Self.isTmuxSessionAttached(sessionName)
-            DispatchQueue.main.async {
-                self?.tmuxCheckInFlight = false
-                guard self?.cachedTmuxAttached != attached else { return }
-                self?.cachedTmuxAttached = attached
-                self?.refresh()
-            }
         }
     }
 
@@ -334,18 +341,30 @@ class SidebarTabManager: ObservableObject {
         return !result.isEmpty
     }
 
-    /// Async check if CC is running — never blocks the main thread.
-    private func checkCCAsync(sessionName: String) {
-        guard !ccCheckInFlight else { return }
-        ccCheckInFlight = true
+    /// Async check for a tab's tmux/CC state — never blocks the main thread.
+    private func checkTabRunStateAsync(tabId: ObjectIdentifier, sessionName: String) {
+        guard !tabChecksInFlight.contains(tabId) else { return }
+        tabChecksInFlight.insert(tabId)
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let running = Self.isCCRunningInSession(sessionName)
+            let ccRunning = Self.isCCRunningInSession(sessionName)
+            let attached = Self.isTmuxSessionAttached(sessionName)
+            let newState: TabRunState
+            if ccRunning {
+                newState = .ccRunning
+            } else if attached {
+                newState = .tmuxAttached
+            } else {
+                newState = .idle
+            }
+
             DispatchQueue.main.async {
-                self?.ccCheckInFlight = false
-                guard self?.cachedCCRunning != running else { return }
-                self?.cachedCCRunning = running
-                self?.refresh()
+                guard let self else { return }
+                self.tabChecksInFlight.remove(tabId)
+                guard let tabWindow = self.tabWindow(for: tabId),
+                      let surface = self.firstPane(in: tabWindow),
+                      Self.sessionName(for: surface) == sessionName else { return }
+                self.applyTabRunState(newState, for: tabId, window: tabWindow, surfaceId: surface.id)
             }
         }
     }
@@ -374,6 +393,62 @@ class SidebarTabManager: ObservableObject {
         try? check.run()
         check.waitUntilExit()
         return check.terminationStatus == 0
+    }
+
+    private func applyTabRunState(_ newState: TabRunState, for id: ObjectIdentifier, window w: NSWindow, surfaceId: UUID) {
+        let oldState = tabRunStates[id] ?? .unknown
+        guard oldState != newState else { return }
+
+        tabRunStates[id] = newState
+
+        if newState == .ccRunning {
+            tabCCLastActive[id] = Date()
+        }
+
+        if oldState == .ccRunning && newState != .ccRunning {
+            TabMetadataStore.shared.setStatus(
+                tabId: surfaceId,
+                key: "cc_done",
+                value: "CC done",
+                icon: "checkmark.circle"
+            )
+            markAttention(window: w)
+        } else {
+            refresh()
+        }
+    }
+
+    private func firstPane(in w: NSWindow) -> Ghostty.SurfaceView? {
+        guard let controller = w.windowController as? BaseTerminalController else { return nil }
+        return controller.surfaceTree.root?.leftmostLeaf()
+    }
+
+    private func tabWindow(for id: ObjectIdentifier) -> NSWindow? {
+        guard let window else { return nil }
+        let tabWindows: [NSWindow]
+        if let tabbedWindows = window.tabbedWindows, !tabbedWindows.isEmpty {
+            tabWindows = tabbedWindows
+        } else {
+            tabWindows = [window]
+        }
+        return tabWindows.first { ObjectIdentifier($0) == id }
+    }
+
+    private func cacheSecondsRemaining(for id: ObjectIdentifier, now: Date) -> Int? {
+        guard let lastActive = tabCCLastActive[id] else { return nil }
+        let elapsed = now.timeIntervalSince(lastActive)
+        return elapsed < 300 ? max(0, 300 - Int(elapsed)) : nil
+    }
+
+    private func pruneTabState(activeIds: Set<ObjectIdentifier>) {
+        let prunedRunStates = tabRunStates.filter { activeIds.contains($0.key) }
+        if prunedRunStates != tabRunStates {
+            tabRunStates = prunedRunStates
+        }
+        tabChecksInFlight.formIntersection(activeIds)
+        tabLastActivity = tabLastActivity.filter { activeIds.contains($0.key) }
+        tabCCLastActive = tabCCLastActive.filter { activeIds.contains($0.key) }
+        attentionWindows.formIntersection(activeIds)
     }
 
     // MARK: - Action Panel Actions
@@ -426,7 +501,11 @@ class SidebarTabManager: ObservableObject {
 
     func selectTab(_ tab: TabItem) {
         clearAttention(for: tab.id)
+        if let surfaceId = tab.surfaceId {
+            TabMetadataStore.shared.clearStatus(tabId: surfaceId, key: "cc_done")
+        }
         tab.window.makeKeyAndOrderFront(nil)
+        refresh()
     }
 
     func setTabColor(_ color: TerminalTabColor, for tab: TabItem) {

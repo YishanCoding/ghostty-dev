@@ -348,6 +348,51 @@ private struct SidebarTabCard: View {
                     }
                 }
 
+                // Run state and cache countdown
+                if showsRunStateRow {
+                    HStack(spacing: 6) {
+                        switch tab.runState {
+                        case .ccRunning:
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 6, height: 6)
+                            Text("CC running")
+                                .font(.system(size: secondaryFontSize))
+                                .foregroundColor(.green)
+                                .lineLimit(1)
+
+                        case .tmuxAttached:
+                            Circle()
+                                .fill(.blue)
+                                .frame(width: 6, height: 6)
+                            Text("tmux")
+                                .font(.system(size: secondaryFontSize))
+                                .foregroundColor(.blue)
+                                .lineLimit(1)
+
+                        case .idle where idleLabel != nil:
+                            Image(systemName: "pause.fill")
+                                .font(.system(size: iconFontSize))
+                                .foregroundColor(theme.secondaryText)
+                            Text(idleLabel ?? "")
+                                .font(.system(size: secondaryFontSize))
+                                .foregroundColor(theme.secondaryText)
+                                .lineLimit(1)
+
+                        default:
+                            EmptyView()
+                        }
+
+                        if let secs = tab.cacheSecondsRemaining {
+                            Spacer()
+                            Text(cacheLabel(seconds: secs))
+                                .font(.system(size: secondaryFontSize, design: .monospaced))
+                                .foregroundColor(cacheColor(seconds: secs))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+
                 // Status entries
                 if fields.contains(.status), !tab.statusEntries.isEmpty {
                     ForEach(tab.statusEntries, id: \.key) { entry in
@@ -429,6 +474,46 @@ private struct SidebarTabCard: View {
             return Color(nsColor: nsColor)
         }
         return Color.accentColor.opacity(0.7)
+    }
+
+    private var idleMinutes: Int? {
+        guard tab.runState == .idle,
+              let lastActivityDate = tab.lastActivityDate else { return nil }
+        let minutes = Int(Date().timeIntervalSince(lastActivityDate) / 60)
+        return minutes >= 30 ? minutes : nil
+    }
+
+    private var idleLabel: String? {
+        guard let idleMinutes else { return nil }
+        if idleMinutes < 60 {
+            return "idle \(idleMinutes)m"
+        }
+        return "idle \(idleMinutes / 60)h"
+    }
+
+    private var showsRunStateRow: Bool {
+        switch tab.runState {
+        case .ccRunning, .tmuxAttached:
+            return true
+        case .idle:
+            return idleLabel != nil || tab.cacheSecondsRemaining != nil
+        case .unknown:
+            return tab.cacheSecondsRemaining != nil
+        }
+    }
+
+    private func cacheLabel(seconds: Int) -> String {
+        String(format: "cache %d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private func cacheColor(seconds: Int) -> Color {
+        if seconds >= 240 {
+            return .green
+        }
+        if seconds >= 120 {
+            return .yellow
+        }
+        return .red
     }
 }
 
